@@ -31,3 +31,7 @@ npm test
 
 `npm run test:live` also checks a few real websites, and `npm run store:assets`
 rebuilds the icons and store artwork.
+
+## License
+
+[MIT](LICENSE)
