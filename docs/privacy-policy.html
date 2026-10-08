@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy · Webpage Screenshot Pro</title>
+  <meta name="description" content="Privacy policy for the Webpage Screenshot Pro Chrome extension.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #ffffff; --fg: #202124; --muted: #5f6368; --line: #dadce0; --accent: #1a73e8; --panel: #f8f9fa; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #202124; --fg: #e8eaed; --muted: #9aa0a6; --line: #3c4043; --accent: #8ab4f8; --panel: #292a2d; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 "Segoe UI", Roboto, system-ui, -apple-system, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+    header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+    header img { width: 56px; height: 56px; }
+    h1 { font-size: 28px; line-height: 1.2; margin: 0; }
+    h2 { font-size: 20px; margin: 32px 0 8px; }
+    .updated { color: var(--muted); margin: 0 0 24px; }
+    .summary { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; }
+    td:first-child { white-space: nowrap; font-family: ui-monospace, Consolas, monospace; font-size: 14px; }
+    a { color: var(--accent); }
+    @media (max-width: 560px) { td:first-child { white-space: normal; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="icon.svg" alt="">
+      <h1>Webpage Screenshot Pro<br>Privacy Policy</h1>
+    </header>
+    <p class="updated">Effective October 8, 2026</p>
+
+    <div class="summary">
+      <strong>In short:</strong> Webpage Screenshot Pro does not collect, sell or send
+      anywhere any of your data. Pages you capture are turned into files on your own
+      computer, and nothing leaves it unless you choose to send it.
+    </div>
+
+    <h2>What the extension does with web pages</h2>
+    <p>When you ask it to, Webpage Screenshot Pro reads the page in your current tab and
+      turns it into a PDF, JPEG or PNG file. All of this happens inside your browser, on your
+      computer. The file is saved to your Downloads folder, or copied to your clipboard if you
+      choose Copy. The extension has no servers and makes no network requests of its own: it
+      does not upload pages, screenshots, addresses or anything else.</p>
+    <p>To make files smaller, it can re-encode the images a page has already loaded. It takes
+      them from what your browser already downloaded for that page; it does not download them
+      again or send them anywhere.</p>
+
+    <h2>What it stores, and where</h2>
+    <ul>
+      <li><strong>Your settings</strong> (format, layout, compression, save folder and so on) are
+        kept with Chrome's extension storage. If you use Chrome Sync, Chrome syncs them to your
+        other computers through your Google account, like any extension's settings.</li>
+      <li><strong>Debug logs</strong> are kept only on your computer (the last 500 entries). They
+        always record errors and when captures start and finish, with only the website's domain
+        (for example <em>example.com</em>), not the full address. If you turn on <em>Debug
+        logging</em>, they also record each step and the full page address. You can view, download
+        or clear them at any time from the extension's menu.</li>
+      <li><strong>Captured files</strong> are saved where you tell Chrome to save downloads. The
+        extension doesn't keep copies.</li>
+    </ul>
+
+    <h2>Sharing logs with the developer</h2>
+    <p>Logs are only shared if you choose <em>Submit logs</em>. That saves a report file to your
+      Downloads folder (the extension's version, your browser version, your settings and the logs)
+      and opens an email addressed to the developer in your own email program. Nothing is sent
+      unless you attach the file and send the email yourself, and you can read the file first.</p>
+
+    <h2>Permissions, and why they're needed</h2>
+    <table>
+      <tr><th>Permission</th><th>Used for</th></tr>
+      <tr><td>debugger</td><td>Having Chrome render the page as a PDF or a full-page image, and
+        reading the images the page already loaded so they can be compressed. Chrome shows a
+        "started debugging this browser" bar while it's in use.</td></tr>
+      <tr><td>activeTab, scripting</td><td>Preparing the tab you chose (loading lazy images,
+        hiding chat bubbles, showing the progress card) when you click the button, use the
+        right-click menu or press the shortcut. Only that tab, only then.</td></tr>
+      <tr><td>downloads</td><td>Saving the finished file to your Downloads folder.</td></tr>
+      <tr><td>storage</td><td>Remembering your settings and keeping the local debug log.</td></tr>
+      <tr><td>contextMenus</td><td>The right-click menu items.</td></tr>
+      <tr><td>offscreen</td><td>Handing large finished files to Chrome's downloader efficiently.</td></tr>
+      <tr><td>Read all sites (optional)</td><td>Asked for only if you use <em>Save all tabs</em>,
+        so the extension can save tabs other than the one you clicked on. You can remove it at any
+        time in Chrome's extension settings.</td></tr>
+    </table>
+
+    <h2>What it never does</h2>
+    <ul>
+      <li>No analytics, tracking, advertising or third-party code.</li>
+      <li>No selling or transferring of data, and no use of data for anything other than making
+        your captures.</li>
+      <li>No access to pages you haven't asked it to capture.</li>
+    </ul>
+
+    <h2>Changes</h2>
+    <p>If this policy changes, the new version will be posted on this page with a new effective
+      date.</p>
+
+    <h2>Contact</h2>
+    <p>Questions or problems: <a href="mailto:stoneforestdesign@gmail.com">stoneforestdesign@gmail.com</a></p>
+  </main>
+</body>
+</html>

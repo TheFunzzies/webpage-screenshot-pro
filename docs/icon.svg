@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Webpage Screenshot Pro: a camera floating in front of a document.
+       Material style: flat Google colours, rounded geometry, one soft
+       elevation shadow under the floating camera. -->
+  <defs>
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#202124" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+  <!-- Document -->
+  <path d="M24 6h44l24 24v74a10 10 0 0 1-10 10H24a10 10 0 0 1-10-10V16A10 10 0 0 1 24 6z" fill="#1A73E8"/>
+  <path d="M68 6l24 24H76a8 8 0 0 1-8-8z" fill="#8AB4F8"/>
+  <rect x="26" y="34" width="34" height="7" rx="3.5" fill="#fff" opacity=".95"/>
+  <rect x="26" y="48" width="50" height="7" rx="3.5" fill="#fff" opacity=".7"/>
+  <rect x="26" y="62" width="22" height="7" rx="3.5" fill="#fff" opacity=".7"/>
+  <!-- Camera, lifted off the page -->
+  <g filter="url(#lift)">
+    <path d="M58 58h20l5-7h12l5 7h6a12 12 0 0 1 12 12v32a12 12 0 0 1-12 12H58a12 12 0 0 1-12-12V70a12 12 0 0 1 12-12z" fill="#EA4335"/>
+  </g>
+  <rect x="46" y="70" width="72" height="5" fill="#C5221F" opacity=".35"/>
+  <circle cx="84" cy="88" r="19" fill="#fff"/>
+  <circle cx="84" cy="88" r="12.5" fill="#FBBC04"/>
+  <circle cx="79" cy="83" r="4" fill="#fff" opacity=".85"/>
+  <circle cx="109" cy="68" r="3.5" fill="#fff" opacity=".9"/>
+</svg>

@@ -1,0 +1,22 @@
+<!doctype html>
+<!-- Things that float over the page (chat bubble, cookie banner, newsletter
+     popup) next to a fixed header that belongs to the layout. -->
+<html><head><meta charset="utf-8"><title>Floating Fixture</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; }
+  header { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #333; color: #fff; padding: 16px; box-sizing: border-box; }
+  main { padding: 80px 40px; }
+  main p { height: 400px; }
+  .chat { position: fixed; right: 20px; bottom: 20px; width: 60px; height: 60px; border-radius: 50%; background: #e91e63; color: #fff; font-size: 9px; }
+  .cookies { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; background: #fffde7; padding: 20px; box-sizing: border-box; }
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); }
+  .popup { position: fixed; left: 50%; top: 40%; width: 300px; margin-left: -150px; background: #fff; padding: 20px; }
+</style></head>
+<body>
+  <header>HEADER-MARKER</header>
+  <main><p>Paragraph one.</p><p>Paragraph two.</p><p>Paragraph three.</p><p>FOOTER-MARKER</p></main>
+  <div class="chat">CHAT-MARKER</div>
+  <div class="cookies">COOKIE-MARKER</div>
+  <div class="backdrop"></div>
+  <div class="popup">POPUP-MARKER</div>
+</body></html>

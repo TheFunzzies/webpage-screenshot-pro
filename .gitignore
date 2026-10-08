@@ -1,0 +1,10 @@
+# Test tools and their output
+tests/node_modules/
+tests/output/
+tests/fixtures/generated/
+
+# Store build files: packaged zips go in GitHub releases, and the full-page
+# render and popup capture are only inputs for the screenshots.
+store/*.zip
+store/recipe-page.png
+store/popup.png

@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- A pinned sidebar whose table of contents scrolls on its own and is much
+     taller than the page's main content (like the Alpha Vantage docs). -->
+<html><head><meta charset="utf-8"><title>Sidebar Fixture</title>
+<style>
+  body { margin: 0; font-family: Georgia, serif; }
+  aside { position: fixed; top: 0; bottom: 0; left: 0; width: 240px; overflow-y: auto; background: #263238; color: #eceff1; }
+  aside a { display: block; height: 30px; line-height: 30px; padding-left: 16px; color: inherit; }
+  main { margin-left: 260px; padding: 20px; }
+  main p { height: 200px; }
+</style></head>
+<body>
+  <aside id="toc"></aside>
+  <main>
+    <h1>Short main content</h1>
+    <p>Section one.</p><p>Section two.</p><p>Section three.</p>
+    <p>MAIN-END</p>
+  </main>
+  <script>
+    const toc = document.getElementById('toc');
+    for (let i = 1; i <= 100; i++) {
+      const a = document.createElement('a');
+      a.textContent = 'TOC-' + String(i).padStart(3, '0');
+      toc.appendChild(a);
+    }
+  </script>
+</body></html>

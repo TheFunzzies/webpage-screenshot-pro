@@ -1,0 +1,17 @@
+{
+  "name": "webpage-screenshot-pro-tests",
+  "private": true,
+  "type": "module",
+  "description": "Tests for the Webpage Screenshot Pro extension in ../fullpage-pdf",
+  "scripts": {
+    "unit": "node unit.mjs",
+    "test": "node unit.mjs && node e2e.mjs",
+    "test:live": "node e2e.mjs --live",
+    "store:assets": "node store-assets.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "0.1.100",
+    "pdfjs-dist": "^4.10.38",
+    "puppeteer": "^24.43.1"
+  }
+}

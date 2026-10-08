@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Toolbar sizes (16 and 32 px): the same picture with fewer details so it
+       stays readable. -->
+  <path d="M6 1h11l7 7v19a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V4a3 3 0 0 1 3-3z" fill="#1A73E8"/>
+  <path d="M17 1l7 7h-5a2 2 0 0 1-2-2z" fill="#8AB4F8"/>
+  <rect x="6.5" y="9" width="8" height="2.5" rx="1.25" fill="#fff"/>
+  <path d="M14.5 15h4l1.4-2h3.2l1.4 2h1.5a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H14.5a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z" fill="#EA4335" stroke="#fff" stroke-width="1.2"/>
+  <circle cx="21" cy="22" r="4.6" fill="#fff"/>
+  <circle cx="21" cy="22" r="2.8" fill="#FBBC04"/>
+</svg>

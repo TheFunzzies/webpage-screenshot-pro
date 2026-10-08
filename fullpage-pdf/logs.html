@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Logs · Webpage Screenshot Pro</title>
+  <style>
+    :root {
+      --bg: #ffffff; --panel: #f8f9fa; --fg: #1f1f1f; --muted: #5f6368; --line: #dadce0;
+      --accent: #c5221f; --accent-hover: #a50e0e; --ok: #188038; --warn: #b06000; --err: #d93025;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #202124; --panel: #292a2d; --fg: #e8eaed; --muted: #9aa0a6; --line: #3c4043;
+        --accent: #f28b82; --accent-hover: #f6aea9; --ok: #81c995; --warn: #fdd663; --err: #f28b82;
+      }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 16px; }
+    h1 { margin: 0; font-size: 20px; }
+    .about { color: var(--muted); font-size: 13px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .bar .spacer { flex: 1; }
+    select, button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line);
+                     background: var(--bg); color: var(--fg); cursor: pointer; }
+    button:hover { background: var(--panel); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+    button.primary:hover { background: var(--accent-hover); }
+    #notice { padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); }
+    #notice[hidden] { display: none; }
+    .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+    ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    li { display: grid; grid-template-columns: 150px 64px 1fr; gap: 12px; padding: 8px 12px; border-top: 1px solid var(--line); }
+    li:first-child { border-top: 0; }
+    .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 1px; }
+    .level { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding-top: 2px; }
+    .level.error { color: var(--err); }
+    .level.warn { color: var(--warn); }
+    .level.info { color: var(--ok); }
+    .level.debug { color: var(--muted); }
+    .event { overflow-wrap: anywhere; }
+    .details { margin-top: 4px; color: var(--muted); font: 12px/1.4 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    @media (max-width: 640px) {
+      li { grid-template-columns: 1fr auto; }
+      .time { grid-column: 1; }
+      .level { grid-column: 2; grid-row: 1; text-align: right; }
+      .entry { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1>Debug logs</h1>
+      <div class="about" id="about"></div>
+    </div>
+    <div class="bar">
+      <select id="filter" aria-label="Show">
+        <option value="all">Everything</option>
+        <option value="warn">Warnings and errors</option>
+        <option value="error">Errors only</option>
+      </select>
+      <span class="spacer"></span>
+      <button id="copy">Copy</button>
+      <button id="download">Download</button>
+      <button id="clear">Clear</button>
+      <button id="submit" class="primary">Submit logs</button>
+    </div>
+    <div id="notice" role="status" hidden></div>
+    <ol id="list"></ol>
+    <div id="empty" class="empty" hidden>Nothing logged yet.</div>
+  </main>
+  <script src="settings.js"></script>
+  <script src="logs.js"></script>
+</body>
+</html>

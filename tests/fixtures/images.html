@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Image cases compression has to handle: big WebP photos shown small,
+     transparent product shots on white, a CSS background photo, a no-op
+     filter wrapper, invisible hover images and a web component. -->
+<html><head><meta charset="utf-8"><title>Images Fixture</title>
+<style>
+  body { margin: 0; padding: 20px 40px; font-family: system-ui, sans-serif; background: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(3, 300px); gap: 16px; }
+  .grid img { width: 300px; height: 200px; object-fit: cover; display: block; }
+  .product img { width: 200px; height: 200px; }
+  .hero-bg { height: 300px; background: url(generated/big-2.webp) center / cover; margin: 20px 0; }
+  .noop { filter: blur(0px); }
+  .hover { position: relative; width: 300px; height: 200px; }
+  .hover img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .hover img + img { opacity: 0; }
+</style></head>
+<body>
+  <h1>IMAGES-START</h1>
+  <div class="grid noop">
+    <img src="generated/big-1.webp" alt=""><img src="generated/big-2.webp" alt=""><img src="generated/big-3.webp" alt="">
+  </div>
+  <div class="product"><img src="generated/product.png" alt=""></div>
+  <div class="hero-bg"></div>
+  <div class="hover"><img src="generated/big-1.webp" alt=""><img src="generated/big-3.webp" alt=""></div>
+  <review-photos></review-photos>
+  <p>IMAGES-END</p>
+  <script>
+    customElements.define('review-photos', class extends HTMLElement {
+      connectedCallback() {
+        // Like a review-photo carousel: one visible photo, and a lazy slide
+        // parked off to the side. On TotalBoat a widget like this once made
+        // capture hang (the live test covers that site); here it checks that
+        // lazy images inside web components don't trip compression up.
+        this.attachShadow({ mode: 'open' }).innerHTML =
+          '<img src="generated/big-4.webp" style="width:300px;height:200px" alt="">' +
+          '<div style="position:relative;width:300px;height:200px;overflow:hidden">' +
+          '<img loading="lazy" src="generated/big-1.webp" style="position:absolute;left:3000px;width:300px;height:200px" alt=""></div>';
+      }
+    });
+  </script>
+</body></html>
