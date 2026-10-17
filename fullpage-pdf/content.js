@@ -23,7 +23,12 @@
 
   function setStyle(el, props) {
     const prev = el.getAttribute('style');
-    undo.push(() => (prev === null ? el.removeAttribute('style') : el.setAttribute('style', prev)));
+    undo.push(() => {
+      // Setting the attribute first: just removing it can leave Chrome to
+      // write the changed inline style back later as an empty style="".
+      el.setAttribute('style', prev ?? '');
+      if (prev === null) el.removeAttribute('style');
+    });
     for (const [k, v] of Object.entries(props)) el.style.setProperty(k, v, 'important');
   }
 
@@ -402,6 +407,76 @@
     setStyle(html, { width: hs.width, ...(hs.position === 'static' ? { position: 'relative' } : {}) });
     pinViewportUnits(['width', 'min-width', 'max-width'], VIEWPORT_WIDTH_UNIT);
     return width;
+  }
+
+  // ---------- Page breaks ----------
+
+  // Chrome never splits an inline-block (or inline-flex, -grid, -table)
+  // across pages: one that doesn't fit is pushed to the next page, leaving
+  // the rest of this one blank, and then cut through wherever the page ends.
+  // Grid frameworks often lay the whole article out as one, so on long
+  // pages a row of such boxes is turned into a wrapping flex row, which
+  // looks the same but breaks between lines like normal text.
+  const ATOMIC_INLINE = /^inline-(?:block|flex|grid|table)$/;
+  const FLEX_ALIGN = { top: 'flex-start', middle: 'center', bottom: 'flex-end', 'text-top': 'flex-start', 'text-bottom': 'flex-end' };
+
+  // The parent's in-flow children, if they are all such boxes with nothing
+  // but white space between them; otherwise null.
+  function rowOfBoxes(parent) {
+    if (!/^(?:block|flow-root|list-item)$/.test(getComputedStyle(parent).display)) return null;
+    const boxes = [];
+    for (const node of parent.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (node.data.trim()) return null;
+        continue;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      const cs = getComputedStyle(node);
+      if (cs.display === 'none' || cs.position === 'absolute' || cs.position === 'fixed') continue;
+      if (!ATOMIC_INLINE.test(cs.display) || cs.float !== 'none') return null;
+      boxes.push(node);
+    }
+    return boxes.length ? boxes : null;
+  }
+
+  function flexAlign(textAlign, rtl) {
+    if (/center/.test(textAlign)) return 'center';
+    if (textAlign === 'end' || textAlign === (rtl ? 'left' : 'right')) return 'flex-end';
+    return 'flex-start';
+  }
+
+  // pageHeight: the height of one PDF page in CSS pixels. Returns how many
+  // rows were changed.
+  function letPagesBreak({ pageHeight }) {
+    if (rootScroller().scrollHeight <= pageHeight) return 0;
+    const tall = pageHeight / 3;
+    const seen = new Set();
+    let rows = 0;
+    for (const el of document.body.querySelectorAll('*')) {
+      const parent = el.parentElement;
+      if (!parent || seen.has(parent) || !ATOMIC_INLINE.test(getComputedStyle(el).display)) continue;
+      if (el.getBoundingClientRect().height < tall) continue;
+      seen.add(parent);
+      const boxes = rowOfBoxes(parent);
+      if (!boxes) continue;
+      const ps = getComputedStyle(parent);
+      // Pin margins first: an auto margin does nothing on an inline-block
+      // but would push a flex item around.
+      const styles = boxes.map((b) => {
+        const cs = getComputedStyle(b);
+        return {
+          'margin-left': cs.marginLeft, 'margin-right': cs.marginRight,
+          'align-self': FLEX_ALIGN[cs.verticalAlign] || 'baseline',
+        };
+      });
+      boxes.forEach((b, i) => setStyle(b, styles[i]));
+      setStyle(parent, {
+        display: 'flex', 'flex-wrap': 'wrap', 'align-items': 'baseline',
+        'justify-content': flexAlign(ps.textAlign, ps.direction === 'rtl'),
+      });
+      rows++;
+    }
+    return rows;
   }
 
   // Fixed-position elements either belong to the layout (a header bar or a
@@ -804,7 +879,7 @@
   }
 
   window.__fpp = {
-    begin, loadAll, prepare, collectImages, applyImages, restore,
+    begin, loadAll, prepare, letPagesBreak, collectImages, applyImages, restore,
     selectRegion, viewInfo, prepareView, nextFrames,
     setProgress, overlayVisible, removeOverlay, flags,
   };

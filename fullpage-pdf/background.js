@@ -246,6 +246,13 @@ async function capture(tabId, opts, job) {
       maxWidth: MAX_WIDTH_PX,
     });
     if (width) log('debug', 'Capturing wider than the window', { width });
+    if (isPdf) {
+      const viewW = await call(() => document.documentElement.clientWidth);
+      const rows = await call((o) => window.__fpp.letPagesBreak(o), {
+        pageHeight: pageHeightPx(opts.layout, Math.max(viewW, width || 0), opts.stamp),
+      });
+      if (rows) log('debug', 'Let page breaks fall inside inline-block rows', { rows });
+    }
     check();
 
     const level = isPdf && COMPRESSION[opts.compression];
@@ -571,8 +578,7 @@ async function printToPdf(send, layout, stamp = false, wide = 0) {
       paperWidth: paper.w,
       paperHeight: paper.h,
       marginTop: MARGIN_IN, marginBottom: MARGIN_IN, marginLeft: MARGIN_IN, marginRight: MARGIN_IN,
-      // Lay the page out at its on-screen width, scaled to fit the paper.
-      scale: Math.min(2, Math.max(0.1, ((paper.w - 2 * MARGIN_IN) * 96) / w)),
+      scale: paperScale(paper, w),
     });
   }
 
@@ -600,6 +606,16 @@ async function printToPdf(send, layout, stamp = false, wide = 0) {
   const roomier = await print({ paperHeight: Math.min(params.paperHeight * 1.25, MAX_PAGE_PX / 96) });
   if (countPdfPages(roomier) === 1) return roomier;
   return print({ pageRanges: '1' });
+}
+
+// Paper pages lay the page out at its on-screen width, scaled to fit.
+const paperScale = (paper, w) => Math.min(2, Math.max(0.1, ((paper.w - 2 * MARGIN_IN) * 96) / w));
+
+// The height of one PDF page in the page's CSS pixels.
+function pageHeightPx(layout, w, stamp) {
+  if (layout === 'single') return MAX_PAGE_PX - (stamp ? 2 * STAMP_BAND_IN * 96 : 0);
+  const paper = PAPER[layout] || PAPER.letter;
+  return ((paper.h - 2 * MARGIN_IN) * 96) / paperScale(paper, w);
 }
 
 function countPdfPages(bytes) {

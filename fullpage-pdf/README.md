@@ -150,6 +150,14 @@ granted access to tabs up front (what a click grants in real use).
 
 ## Version history
 
+- **0.9.1**: Fixed long pages coming out with near-blank pages in PDFs.
+  Sites built on older grid frameworks (e.g. Yale Appliance's blog) lay the
+  whole article out as one inline-block, which Chrome won't split across
+  pages, so it pushed the article onto a fresh page (and on Letter/A4 cut
+  lines in half at page edges). Such rows are now laid out so pages break
+  between lines, and put back afterwards. The page is also restored more
+  cleanly (no empty style attributes left behind).
+
 - **0.9.0**: Captures sideways scrolling too. Full-page PDFs and images now
   include wide tables and charts that scroll sideways (every column, e.g.
   Consumer Reports ratings charts) and pages wider than the window, at the

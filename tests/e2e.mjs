@@ -286,6 +286,39 @@ if (!live) {
     return `${note}, PDF ${width}px, JPEG ${img.width}px wide`;
   });
 
+  // ---------- Page breaks ----------
+
+  test('long inline-block article: no blank pages, page restored', async () => {
+    let h;
+    const before = async (page) => { h = await page.evaluate(() => document.documentElement.scrollHeight); };
+    const run = await session.capture(`${base}/inline-grid.html`, { format: 'pdf' }, { before });
+    // Elements still carrying a style attribute afterwards (none expected).
+    const styled = await run.page.evaluate(() => [...document.querySelectorAll('.grid, .grid__item')]
+      .filter((el) => el.hasAttribute('style')).map((el) => `${el.className}: "${el.getAttribute('style')}"`).join('; ') || false);
+    await run.page.close();
+    assert.ok(run.result.ok, run.result.error);
+    const pdf = await readPdf(run.files[0]);
+    assert.ok(h > 19200, `fixture only ${h}px tall`);
+    assert.equal(pdf.pages.length, Math.ceil((h + 2) / 19200), `${pdf.pages.length} pages for a ${h}px page`);
+    // The article starts on the first page, right under its title.
+    assert.match(pdf.pages[0].text, /SITE-HEADER[^]*ARTICLE-TITLE[^]*ARTICLE-START/);
+    assert.match(pdf.text, /SIDEBAR-BOX/);
+    assert.match(pdf.text, /ARTICLE-END/);
+    assert.equal(styled, false, 'page not restored');
+    return `${run.ms} ms, ${pdf.pages.length} pages for ${h}px`;
+  });
+
+  test('long inline-block article on Letter pages: starts on page 1, every page has text', async () => {
+    const { pdf, note } = await pdfOf(`${base}/inline-grid.html`, { layout: 'letter' });
+    assert.match(pdf.pages[0].text, /ARTICLE-START/);
+    const thin = pdf.pages.findIndex((p, i) => i < pdf.pages.length - 1 && p.text.length < 300);
+    assert.equal(thin, -1, `page ${thin + 1} is (nearly) blank`);
+    // Lines break between paragraphs, so none is lost or doubled.
+    const nums = pdf.text.match(/Paragraph \d+ /g).map((s) => +s.match(/\d+/)[0]);
+    assert.deepEqual(nums, Array.from({ length: 949 }, (_, i) => i + 1));
+    return note;
+  });
+
   // ---------- Visible area and region ----------
 
   const imageSize = async (file) => {
@@ -538,6 +571,17 @@ if (live) {
     const img = await loadImage(fs.readFileSync(run.files[0]));
     assert.ok(img.width >= chart.right, `image ${img.width}px wide, chart ends at ${chart.right}px`);
     return `${note}, PDF ${width}px and PNG ${img.width}px wide (window ${chart.vw}px, chart ends at ${chart.right}px)`;
+  });
+
+  test('live: Yale Appliance article (one big inline-block) has no blank pages', async () => {
+    let h;
+    const before = async (page) => { h = await page.evaluate(() => document.documentElement.scrollHeight); };
+    const { pdf, note } = await pdfOf('https://blog.yaleappliance.com/best-induction-ranges', {}, { before });
+    assert.ok(h > 19200, `page only ${h}px tall; the article changed`);
+    assert.ok(pdf.pages.length <= Math.ceil((h + 2) / 19200), `${pdf.pages.length} pages for a ${h}px page`);
+    // The first page used to hold only the site's header.
+    assert.ok(pdf.pages[0].text.length > 5000, `first page has only ${pdf.pages[0].text.length} characters`);
+    return `${note} for ${h}px`;
   });
 
   test('live: TotalBoat High is much smaller than Off', async () => {
