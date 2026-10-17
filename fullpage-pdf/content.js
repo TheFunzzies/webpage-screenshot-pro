@@ -7,8 +7,14 @@
   // rAF stalls in background tabs, so never wait on it alone.
   const frame = () => Promise.race([new Promise((r) => requestAnimationFrame(r)), sleep(50)]);
   const nextFrames = async () => { await frame(); await frame(); };
+  // While loading, a frame of the very tall viewport can take far longer than
+  // 50 ms, and lazy loaders only notice what's on screen when one is drawn.
+  const drawnFrames = async () => {
+    for (let i = 0; i < 2; i++) await Promise.race([new Promise((r) => requestAnimationFrame(r)), sleep(500)]);
+  };
   // A number followed by a viewport unit, e.g. "100vh", "calc(100dvh - 4rem)", "50vmin".
   const VIEWPORT_UNIT = /\d\s*(?:[sld]?vh|[sld]?vmin|[sld]?vmax)\b/i;
+  const VIEWPORT_WIDTH_UNIT = /\d\s*(?:[sld]?vw|[sld]?vmin|[sld]?vmax)\b/i;
 
   let undo = [];
   const images = new Map();
@@ -162,11 +168,13 @@
       if (!flags.skip) setProgress({ text: 'Loading the whole page…', pct, canSkip: true });
       send({ type: 'progress', text: 'Loading the whole page…', pct });
     };
+    // Let lazy loaders see the first (now much taller) screen before moving on.
+    await drawnFrames();
     let y = 0;
     while (Date.now() < deadline && !flags.cancel && !flags.skip) {
       y += el.clientHeight;
       scrollTo(el, y);
-      await nextFrames();
+      await drawnFrames();
       await sleep(40);
       report();
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2) {
@@ -178,13 +186,29 @@
     scrollTo(el, 0);
   }
 
-  async function loadAll({ maxMs, from = 0, to = 60 }) {
+  async function loadAll({ maxMs, from = 0, to = 60, sideways = false }) {
     forceEager();
     const deadline = Date.now() + maxMs;
     const root = rootScroller();
     const inner = findInnerScroller(root);
     await scrollThrough(inner || root, deadline, from, to);
+    if (sideways) {
+      // Lazy cells and images in wide areas load when scrolled into view too.
+      const els = sidewaysScrollers();
+      if (pageScrollsSideways()) els.unshift(root);
+      for (const el of els) await scrollAcross(el, deadline);
+    }
     return { cancelled: flags.cancel };
+  }
+
+  async function scrollAcross(el, deadline) {
+    const start = el.scrollLeft;
+    for (let x = el.clientWidth; Date.now() < deadline && !flags.cancel && !flags.skip; x += el.clientWidth) {
+      el.scrollTo({ left: x, behavior: 'instant' });
+      await drawnFrames();
+      if (x >= el.scrollWidth - el.clientWidth) break;
+    }
+    el.scrollTo({ left: start, behavior: 'instant' });
   }
 
   async function settleImages(timeout) {
@@ -214,8 +238,8 @@
   // In print, 100vh means the height of the paper. On one tall page that
   // would blow full-screen sections up to the size of the whole document,
   // so freeze any viewport-unit heights at their current on-screen size.
-  function pinViewportUnits() {
-    const props = ['height', 'min-height', 'max-height'];
+  // (Widths too, when the paper is wider than the window.)
+  function pinViewportUnits(props = ['height', 'min-height', 'max-height'], unit = VIEWPORT_UNIT) {
     const hits = new Map();
     const mark = (els, ps) => {
       if (!ps.length) return;
@@ -228,7 +252,7 @@
     const visit = (rules) => {
       for (const rule of rules) {
         if (rule.style && rule.selectorText) {
-          const ps = props.filter((p) => VIEWPORT_UNIT.test(rule.style.getPropertyValue(p)));
+          const ps = props.filter((p) => unit.test(rule.style.getPropertyValue(p)));
           if (ps.length) {
             try { mark(document.querySelectorAll(rule.selectorText), ps); } catch {}
           }
@@ -239,8 +263,8 @@
     for (const sheet of [...document.styleSheets, ...(document.adoptedStyleSheets || [])]) {
       try { visit(sheet.cssRules); } catch {} // cross-origin sheets can't be read
     }
-    for (const el of document.querySelectorAll('[style*="vh"],[style*="vmin"],[style*="vmax"]')) {
-      mark([el], props.filter((p) => VIEWPORT_UNIT.test(el.style.getPropertyValue(p))));
+    for (const el of document.querySelectorAll('[style*="vh"],[style*="vw"],[style*="vmin"],[style*="vmax"]')) {
+      mark([el], props.filter((p) => unit.test(el.style.getPropertyValue(p))));
     }
     for (const [el, ps] of hits) {
       const cs = getComputedStyle(el);
@@ -265,6 +289,119 @@
       grew = true;
     }
     return grew;
+  }
+
+  // ---------- Sideways scrolling ----------
+
+  // Names that give away a carousel or slider.
+  const SLIDER = /carousel|slider|swiper|slick|splide|glide|flickity|owl-|marquee|ticker|slideshow/i;
+  const CLIPS = /^(?:hidden|clip)$/;
+
+  // Whether the page itself scrolls sideways. (overflow: hidden can make it
+  // wider than the window without letting anyone see the rest.)
+  function pageScrollsSideways() {
+    const root = rootScroller();
+    if (root.scrollWidth <= root.clientWidth + 1) return false;
+    const x = scrollX;
+    window.scrollTo({ left: root.scrollWidth, behavior: 'instant' });
+    const scrolls = scrollX > 0;
+    window.scrollTo({ left: x, behavior: 'instant' });
+    return scrolls;
+  }
+
+  // Wide tables and the like that scroll sideways inside the page. Carousels
+  // scroll sideways too, but unrolling one would lay all its slides out in a
+  // row, so anything that snaps, is named like a slider or holds slides as
+  // wide as itself is left alone, as are thin strips (custom scrollbars,
+  // rows of tabs) other than code.
+  function sidewaysScrollers() {
+    const out = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (el.scrollWidth <= el.clientWidth + 5 || el.clientWidth < 100 || el.clientHeight < 20) continue;
+      const cs = getComputedStyle(el);
+      if (!/^(?:auto|scroll|overlay)$/.test(cs.overflowX) || cs.visibility === 'hidden') continue;
+      if (el.clientHeight < 60 && !/^pre/.test(cs.whiteSpace)) continue;
+      if (!isSlider(el, cs)) out.push(el);
+    }
+    return out;
+  }
+
+  function isSlider(el, cs) {
+    if (cs.scrollSnapType && cs.scrollSnapType !== 'none') return true;
+    for (let n = el, i = 0; n && n !== document.body && i < 4; n = n.parentElement, i++) {
+      const name = [n.id, typeof n.className === 'string' ? n.className : '', n.getAttribute('role'), n.getAttribute('aria-roledescription')].join(' ');
+      if (SLIDER.test(name)) return true;
+    }
+    if (el.querySelector('table')) return false;
+    // Slides: children (or the children of a single track) side by side,
+    // each about as wide as the box. (Rows of a wide chart are wider.)
+    let kids = [...el.children];
+    if (kids.length === 1) kids = [...kids[0].children];
+    const rects = kids.map((k) => k.getBoundingClientRect()).filter((r) => r.width > 0);
+    return rects.length >= 2 && rects[1].left >= rects[0].right - 1 &&
+      rects.every((r) => r.width >= el.clientWidth * 0.8 && r.width <= el.clientWidth * 1.05);
+  }
+
+  // Lets each sideways scroller show everything: code wraps its long lines,
+  // anything else is made as wide as its contents, and whatever would clip
+  // it stops clipping sideways. Areas that would end past maxWidth stay as
+  // they are. Returns the right edge of the widest one in page pixels (0 if
+  // none grew).
+  function unrollSideways(maxWidth) {
+    let right = 0;
+    for (const el of sidewaysScrollers()) {
+      // Unrolling an outer area can leave nothing for an inner one to do.
+      const extra = el.scrollWidth - el.clientWidth;
+      if (extra <= 5) continue;
+      const cs = getComputedStyle(el);
+      if (/^pre/.test(cs.whiteSpace) && !el.querySelector('table, img, svg, canvas, video')) {
+        setStyle(el, { 'white-space': 'pre-wrap', 'overflow-wrap': 'anywhere' });
+        continue;
+      }
+      const r = el.getBoundingClientRect();
+      const edge = r.right + scrollX + extra;
+      if (edge > maxWidth) continue;
+      const left = el.scrollLeft;
+      undo.push(() => el.scrollTo({ left, behavior: 'instant' }));
+      el.scrollTo({ left: 0, behavior: 'instant' });
+      const width = `${parseFloat(cs.width) + extra}px`;
+      setStyle(el, {
+        width, 'min-width': width, 'max-width': 'none', 'flex-shrink': '0', overflow: 'visible',
+        ...(el.scrollHeight > el.clientHeight + 5 ? { height: 'auto', 'max-height': 'none' } : {}),
+      });
+      for (let n = el.parentElement; n; n = n.parentElement) {
+        const ns = getComputedStyle(n);
+        if (!CLIPS.test(ns.overflowX) || n.getBoundingClientRect().right + scrollX >= edge - 1) continue;
+        if (n === document.documentElement || n === document.body) {
+          setStyle(n, { 'overflow-x': 'visible', ...(CLIPS.test(ns.overflowY) ? {} : { 'overflow-y': 'visible' }) });
+        } else if (CLIPS.test(ns.overflowY)) {
+          // Still clip above and below; clip (unlike hidden) allows that.
+          setStyle(n, { 'overflow-x': 'visible', 'overflow-y': 'clip', ...(ns.display === 'block' ? { display: 'flow-root' } : {}) });
+        }
+      }
+      right = Math.max(right, edge);
+    }
+    return right;
+  }
+
+  // Width to capture, in CSS pixels, when the page or areas in it scroll
+  // sideways; 0 when the window's width will do.
+  function widenForSideways(maxWidth) {
+    const root = rootScroller();
+    const vw = root.clientWidth;
+    const pageWidth = pageScrollsSideways() ? Math.min(root.scrollWidth, maxWidth) : 0;
+    const width = Math.ceil(Math.max(pageWidth, unrollSideways(maxWidth)));
+    if (width <= vw + 1) return 0;
+    // Paper wider than the window would lay the page out wider; keep it at
+    // the window's width, with the extra drawn beside it. Elements placed
+    // against the page itself (like an off-screen menu at left: 100%) would
+    // otherwise follow the paper's edge, and anything past that edge makes
+    // Chrome shrink the whole print.
+    const html = document.documentElement;
+    const hs = getComputedStyle(html);
+    setStyle(html, { width: hs.width, ...(hs.position === 'static' ? { position: 'relative' } : {}) });
+    pinViewportUnits(['width', 'min-width', 'max-width'], VIEWPORT_WIDTH_UNIT);
+    return width;
   }
 
   // Fixed-position elements either belong to the layout (a header bar or a
@@ -382,12 +519,13 @@
   }
 
   // Runs at normal viewport size, after loadAll().
-  async function prepare({ hideFloating, paged, image, waitImagesMs }) {
+  async function prepare({ hideFloating, paged, image, waitImagesMs, sideways, maxWidth }) {
     const root = rootScroller();
     await settleImages(waitImagesMs);
     pinViewportUnits();
     const inner = findInnerScroller(root);
     if (inner) expand(inner);
+    const width = sideways ? widenForSideways(maxWidth) : 0;
     if (hideFloating) handleFloating(paged, inner, image);
     freezeMotion();
     await nextFrames(); // let animations settle at their end state first
@@ -395,7 +533,7 @@
     const shadowedChars = tameTextShadows();
     scrollTo(root, 0);
     await nextFrames();
-    return { expanded: !!inner, shadowedChars, skipped, photos: countPhotos() };
+    return { expanded: !!inner, width, shadowedChars, skipped, photos: countPhotos() };
   }
 
   // ---------- Smaller file ----------

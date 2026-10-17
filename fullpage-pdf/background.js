@@ -10,6 +10,9 @@ const TALL_VIEWPORT_MAX_PX = 10000;
 // Acrobat and most viewers reject pages taller than 200 inches; longer
 // pages are split into several tall pages.
 const MAX_PAGE_PX = 200 * 96;
+// Areas that scroll sideways widen the capture up to this many CSS pixels;
+// anything wider is left scrolling as it is.
+const MAX_WIDTH_PX = 8000;
 const PAPER = { letter: { w: 8.5, h: 11 }, a4: { w: 8.27, h: 11.69 } };
 const MARGIN_IN = 0.4;
 // Images taller than this (in device pixels) are saved in several parts:
@@ -132,10 +135,10 @@ async function run(tabId, opts) {
   let tip;
   const started = Date.now();
   opts = { ...DEFAULTS, action: 'save', ...opts };
-  const { mode, format, layout, compression, action, stamp, loadLazy, hideFloating } = opts;
+  const { mode, format, layout, compression, action, stamp, loadLazy, hideFloating, sideways } = opts;
   try {
     const url = (await chrome.tabs.get(tabId).catch(() => null))?.url;
-    log('info', 'Capture started', { url, mode, format, layout, compression, action, stamp, loadLazy, hideFloating });
+    log('info', 'Capture started', { url, mode, format, layout, compression, action, stamp, loadLazy, hideFloating, sideways });
     const { size, photos, files, copied, note } = await capture(tabId, opts, job);
     result = { ok: true, size, files, copied, note };
     log('info', 'Capture finished', { ms: Date.now() - started, size, files, copied: !!copied, ...(note ? { note } : {}) });
@@ -226,7 +229,7 @@ async function capture(tabId, opts, job) {
         mobile: false,
       });
       try {
-        await call((o) => window.__fpp.loadAll(o), { maxMs: MAX_LOAD_MS, from: STEPS.load[0], to: STEPS.load[1] });
+        await call((o) => window.__fpp.loadAll(o), { maxMs: MAX_LOAD_MS, from: STEPS.load[0], to: STEPS.load[1], sideways: opts.sideways });
       } finally {
         await send('Emulation.clearDeviceMetricsOverride').catch(() => {});
       }
@@ -234,12 +237,15 @@ async function capture(tabId, opts, job) {
     }
 
     report(tabId, 'Preparing the page…', STEPS.prepare);
-    const { photos } = await call((o) => window.__fpp.prepare(o), {
+    const { photos, width } = await call((o) => window.__fpp.prepare(o), {
       hideFloating: opts.hideFloating,
       paged: isPdf && opts.layout !== 'single',
       image: !isPdf,
       waitImagesMs: opts.loadLazy ? 4000 : 1500,
+      sideways: opts.sideways,
+      maxWidth: MAX_WIDTH_PX,
     });
+    if (width) log('debug', 'Capturing wider than the window', { width });
     check();
 
     const level = isPdf && COMPRESSION[opts.compression];
@@ -259,14 +265,14 @@ async function capture(tabId, opts, job) {
           report(tabId, `Rendering PDF… ${s} s`, STEPS.render, { busy: true });
         }, 1000);
         try {
-          const pdf = await printToPdf(send, opts.layout, opts.stamp);
+          const pdf = await printToPdf(send, opts.layout, opts.stamp, width);
           outputs = [addPdfInfo(pdf, { title: tab.title, url: tab.url })];
         } finally {
           clearInterval(ticker);
         }
       } else {
         report(tabId, 'Capturing image…', STEPS.render);
-        outputs = await captureImages(send, format, (i, n) => {
+        outputs = await captureImages(send, format, width, (i, n) => {
           if (n > 1) report(tabId, `Capturing image… part ${i + 1} of ${n}`, STEPS.render + ((STEPS.save - STEPS.render) * i) / n);
         });
       }
@@ -532,10 +538,14 @@ const stampTemplate = (left, right) =>
   `<div style="box-sizing:border-box;width:100%;padding:0 0.3in;font:13px system-ui,-apple-system,'Segoe UI',sans-serif;color:#666;display:flex;justify-content:space-between;gap:16px;">` +
   `<span style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${left}</span><span style="white-space:nowrap;">${right}</span></div>`;
 
-async function printToPdf(send, layout, stamp = false) {
+// wide: the width to capture when the page or areas in it scroll sideways
+// (0: the window's width).
+async function printToPdf(send, layout, stamp = false, wide = 0) {
   // Use the on-screen styles, not the site's print stylesheet.
   await send('Emulation.setEmulatedMedia', { media: 'screen' });
-  const { w, h } = await measurePage(send);
+  const page = await measurePage(send);
+  const w = Math.max(page.w, wide || 0);
+  const { h } = page;
 
   const params = {
     printBackground: true,
@@ -546,8 +556,9 @@ async function printToPdf(send, layout, stamp = false) {
   };
   const single = layout === 'single';
   if (single) {
-    // One page exactly as wide as the viewport and as tall as the content,
-    // so it reads like a full-page screenshot.
+    // One page exactly as wide as the viewport (or the sideways-scrolling
+    // content) and as tall as the content, so it reads like a full-page
+    // screenshot.
     Object.assign(params, {
       paperWidth: w / 96,
       paperHeight: Math.min(h + 2 + (stamp ? 2 * STAMP_BAND_IN * 96 : 0), MAX_PAGE_PX) / 96,
@@ -762,8 +773,10 @@ async function readStream(send, handle) {
 }
 
 // Full-page screenshot, split into parts when the page is very tall.
-async function captureImages(send, format, onPart) {
-  const { w, h, dpr } = await measurePage(send);
+async function captureImages(send, format, wide, onPart) {
+  const page = await measurePage(send);
+  const { h, dpr } = page;
+  const w = Math.max(page.w, wide || 0);
   const partH = Math.floor(MAX_IMAGE_PX / (dpr || 1));
   const parts = Math.max(1, Math.ceil(h / partH));
   const out = [];

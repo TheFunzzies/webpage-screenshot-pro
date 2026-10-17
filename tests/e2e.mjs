@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadImage } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { launch } from './lib/browser.mjs';
 import { serveFixtures, generateImages } from './lib/fixtures.mjs';
 import { readPdf } from './lib/pdf.mjs';
@@ -30,8 +30,8 @@ const kb = (n) => `${Math.round(n / 1024)} KB`;
 const listDownloads = (dir = path.join(OUT, 'downloads')) => fs.readdirSync(dir, { withFileTypes: true })
   .flatMap((d) => (d.isDirectory() ? listDownloads(path.join(dir, d.name)) : [path.join(dir, d.name)]));
 
-async function pdfOf(url, opts) {
-  const run = await session.capture(url, { format: 'pdf', ...opts });
+async function pdfOf(url, opts, extra) {
+  const run = await session.capture(url, { format: 'pdf', ...opts }, extra);
   assert.ok(run.result?.ok, `capture failed: ${run.result?.error}`);
   assert.equal(run.files.length, 1, 'expected one PDF');
   const pdf = await readPdf(run.files[0]);
@@ -183,6 +183,107 @@ if (!live) {
     await run.page.close();
     assert.equal(run.result.cancelled, true, JSON.stringify(run.result));
     return `${run.ms} ms`;
+  });
+
+  // ---------- Sideways scrolling ----------
+
+  // Measured on the page before capturing: where the wide table ends, a
+  // point inside its last column (clear of the text), where the page heading
+  // sits (page pixels), and the window.
+  let wide;
+  const measureWide = async (page) => {
+    wide = await page.evaluate(() => {
+      const scroller = document.querySelector('.scroll');
+      const box = scroller.getBoundingClientRect();
+      const last = document.querySelector('th.last').getBoundingClientRect();
+      return {
+        right: Math.round(box.left + scrollX + scroller.scrollWidth),
+        last: { x: Math.round(last.left + 4 + scrollX), y: Math.round(last.top + 4 + scrollY) },
+        heading: Math.round(document.querySelector('h1').getBoundingClientRect().left),
+        vw: document.documentElement.clientWidth,
+        dpr: devicePixelRatio,
+      };
+    });
+  };
+  // Where a piece of text starts on the page, in CSS pixels (-1: not found).
+  const xOf = (pdf, str) => {
+    for (const p of pdf.pages) {
+      const item = p.items.find((i) => i.str.includes(str));
+      if (item) return px(item.x);
+    }
+    return -1;
+  };
+  const pixel = async (file, x, y) => {
+    const img = await loadImage(fs.readFileSync(file));
+    const ctx = createCanvas(img.width, img.height).getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    return { width: img.width, rgb: [...ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data.slice(0, 3)] };
+  };
+  const isRed = ([r, g, b]) => r > 150 && g < 90 && b < 90;
+
+  test("wide table: every column on one long page, at the window's layout", async () => {
+    const { pdf, note } = await pdfOf(`${base}/wide-table.html`, {}, { before: measureWide });
+    assert.equal(pdf.pages.length, 1);
+    const width = px(pdf.pages[0].width);
+    assert.ok(width >= wide.right, `page ${width}px wide, table ends at ${wide.right}px`);
+    // The carousels, the code block and the off-screen menu don't widen it.
+    assert.ok(width <= wide.right + 40, `page ${width}px wide, table ends at ${wide.right}px`);
+    const x = xOf(pdf, 'COLUMN-LAST');
+    assert.ok(x > wide.vw && x < width, `COLUMN-LAST at ${x}px on a ${width}px page`);
+    // Laid out at the window's width: the centred heading hasn't moved.
+    assert.ok(Math.abs(xOf(pdf, 'Ratings') - wide.heading) <= 3, `heading at ${xOf(pdf, 'Ratings')}px, on screen ${wide.heading}px`);
+    for (const m of ['CODE-END', 'PAGE-END', 'TABLE-AFTER']) assert.match(pdf.text, new RegExp(m));
+    return `${note}, ${width}px wide (window ${wide.vw}px)`;
+  });
+
+  test("wide table: option off keeps the window's width", async () => {
+    const { pdf, note } = await pdfOf(`${base}/wide-table.html`, { sideways: false }, { before: measureWide });
+    const width = px(pdf.pages[0].width);
+    assert.ok(Math.abs(width - wide.vw) <= 2, `page ${width}px wide, window ${wide.vw}px`);
+    return note;
+  });
+
+  test('wide table on Letter pages is scaled to fit', async () => {
+    const { pdf, note } = await pdfOf(`${base}/wide-table.html`, { layout: 'letter' });
+    assert.ok(pdf.pages.every((p) => p.width === 612 && p.height === 792), 'not Letter size');
+    const at = pdf.pages[0].items.find((i) => i.str.includes('COLUMN-LAST'));
+    assert.ok(at && at.x > 0 && at.x < 612 - 20, `COLUMN-LAST at ${at?.x}pt on a 612pt page`);
+    return note;
+  });
+
+  test('wide table as PNG: the last column is in the picture', async () => {
+    const run = await session.capture(`${base}/wide-table.html`, { format: 'png' }, { before: measureWide });
+    // Afterwards the page is back as it was: the table scrolls again.
+    const after = await run.page.evaluate(() => {
+      const box = document.querySelector('.scroll');
+      return { scrolls: box.scrollWidth > box.clientWidth, styled: [box, document.documentElement, document.body].some((el) => el.hasAttribute('style')) };
+    });
+    await run.page.close();
+    assert.ok(run.result.ok, run.result.error);
+    assert.deepEqual(after, { scrolls: true, styled: false }, 'page not restored');
+    const { width, rgb } = await pixel(run.files[0], wide.last.x * wide.dpr, wide.last.y * wide.dpr);
+    assert.ok(width >= wide.right * wide.dpr, `image ${width}px wide, table ends at ${wide.right}px`);
+    assert.ok(isRed(rgb), `last column at ${wide.last.x},${wide.last.y} is rgb(${rgb}), not red`);
+    return `${run.ms} ms, ${width}px wide`;
+  });
+
+  test('page wider than the window: PDF and JPEG are full width', async () => {
+    let view;
+    const before = async (page) => {
+      view = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: document.documentElement.clientWidth, dpr: devicePixelRatio }));
+    };
+    const { pdf, note } = await pdfOf(`${base}/wide-page.html`, {}, { before });
+    const width = px(pdf.pages[0].width);
+    assert.ok(view.sw >= 2600 && width >= view.sw, `page ${width}px wide, document ${view.sw}px`);
+    assert.ok(xOf(pdf, 'PAGE-RIGHT-EDGE') > view.vw, 'right-hand box not past the window');
+    const run = await session.capture(`${base}/wide-page.html`, { format: 'jpeg' });
+    await run.page.close();
+    assert.ok(run.result.ok, run.result.error);
+    // The middle of the red box at the right-hand end of the strip.
+    const img = await pixel(run.files[0], (2600 - 150) * view.dpr, (60 + 150) * view.dpr);
+    assert.ok(img.width >= 2600 * view.dpr, `image ${img.width}px wide`);
+    assert.ok(isRed(img.rgb), `right-hand box is rgb(${img.rgb}), not red`);
+    return `${note}, PDF ${width}px, JPEG ${img.width}px wide`;
   });
 
   // ---------- Visible area and region ----------
@@ -375,6 +476,7 @@ if (!live) {
     await page.select('#mode', 'region');
     assert.equal(await page.$eval('#go', (b) => b.textContent), 'Select region (PNG)');
     assert.equal(await page.$eval('#loadLazy', (c) => c.closest('label').hidden), true);
+    assert.equal(await page.$eval('#sideways', (c) => c.closest('label').hidden), true);
     await page.select('#mode', 'full');
     await page.click('#more summary');
     await page.select('#nameFormat', 'title-datetime');
@@ -408,6 +510,34 @@ if (live) {
     const { pdf, note } = await pdfOf('https://en.wikipedia.org/wiki/United_States');
     assert.match(pdf.text, /External links/);
     return note;
+  });
+
+  test('live: Consumer Reports ratings chart is captured sideways', async () => {
+    let chart;
+    const before = async (page) => {
+      // The chart is drawn by script after the page loads (there's an empty
+      // one for the Customize tab too).
+      const wide = () => {
+        const el = [...document.querySelectorAll('.chart-ratings-wrapper')].sort((a, b) => b.scrollWidth - a.scrollWidth)[0];
+        return el && el.scrollWidth > el.clientWidth + 100;
+      };
+      await page.waitForFunction(wide, { timeout: 30000 }).catch(() => {});
+      chart = await page.evaluate(() => {
+        const el = [...document.querySelectorAll('.chart-ratings-wrapper')].sort((a, b) => b.scrollWidth - a.scrollWidth)[0];
+        return el && { right: Math.round(el.getBoundingClientRect().left + scrollX + el.scrollWidth), vw: document.documentElement.clientWidth };
+      });
+    };
+    const url = 'https://www.consumerreports.org/appliances/ranges/electric-induction-ranges/c37181/';
+    const { pdf, note } = await pdfOf(url, {}, { before });
+    assert.ok(chart && chart.right > chart.vw, `no sideways-scrolling ratings chart found (${JSON.stringify(chart)}); the page changed or the site blocked the test browser`);
+    const width = px(pdf.pages[0].width);
+    assert.ok(width >= chart.right, `page ${width}px wide, chart ends at ${chart.right}px`);
+    const run = await session.capture(url, { format: 'png' }, { before });
+    await run.page.close();
+    assert.ok(run.result.ok, run.result.error);
+    const img = await loadImage(fs.readFileSync(run.files[0]));
+    assert.ok(img.width >= chart.right, `image ${img.width}px wide, chart ends at ${chart.right}px`);
+    return `${note}, PDF ${width}px and PNG ${img.width}px wide (window ${chart.vw}px, chart ends at ${chart.right}px)`;
   });
 
   test('live: TotalBoat High is much smaller than Off', async () => {

@@ -25,6 +25,7 @@ function readControls() {
     nameFormat: $('nameFormat').value,
     loadLazy: $('loadLazy').checked,
     hideFloating: $('hideFloating').checked,
+    sideways: $('sideways').checked,
     debugLog: $('debugLog').checked,
   };
   return settings;
@@ -42,6 +43,7 @@ function render() {
   $('nameExample').title = $('nameExample').textContent;
   $('loadLazy').checked = settings.loadLazy;
   $('hideFloating').checked = settings.hideFloating;
+  $('sideways').checked = settings.sideways;
   $('compressionHint').textContent = COMPRESSION_HINTS[settings.compression] || '';
   // Show only what applies: data-show="pdf full" means PDF and full page.
   const applies = { pdf: settings.format === 'pdf', full: settings.mode === 'full' };
@@ -103,7 +105,7 @@ function formatSize(bytes) {
   }
 })();
 
-for (const id of ['mode', 'format', 'layout', 'stamp', 'nameFormat', 'loadLazy', 'hideFloating', 'debugLog']) {
+for (const id of ['mode', 'format', 'layout', 'stamp', 'nameFormat', 'loadLazy', 'hideFloating', 'sideways', 'debugLog']) {
   $(id).addEventListener('change', () => {
     readControls();
     render();

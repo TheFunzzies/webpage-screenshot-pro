@@ -11,7 +11,8 @@ export async function pdfInfo(data) {
   return { ...info, pages: doc.numPages };
 }
 
-// Pages (with sizes in points) and all text, page by page.
+// Pages (with sizes in points) and all text, page by page. Each page's
+// `items` gives where each piece of text starts, in points from the left.
 export async function readPdf(file) {
   const data = fs.readFileSync(file);
   const doc = await open(data);
@@ -19,8 +20,8 @@ export async function readPdf(file) {
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
     const { width, height } = page.getViewport({ scale: 1 });
-    const text = (await page.getTextContent()).items.map((x) => x.str).join(' ');
-    pages.push({ width: Math.round(width), height: Math.round(height), text });
+    const items = (await page.getTextContent()).items.map((x) => ({ str: x.str, x: x.transform[4] }));
+    pages.push({ width: Math.round(width), height: Math.round(height), text: items.map((x) => x.str).join(' '), items });
   }
   const { info } = await doc.getMetadata();
   return { bytes: data.length, pages, text: pages.map((p) => p.text).join('\n'), info, images: imageStats(data) };

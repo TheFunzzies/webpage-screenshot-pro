@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- A ratings table much wider than the window, in a wrapper that scrolls
+     sideways (like Consumer Reports' ratings charts). The page hides its own
+     sideways overflow and has an off-screen menu, and there are two
+     carousels and a code block that must not widen the capture. -->
+<html><head><meta charset="utf-8"><title>Wide Table Fixture</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; overflow-x: hidden; }
+  header { height: 60px; background: #333; color: #fff; padding: 18px 40px; box-sizing: border-box; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .scroll { overflow-x: auto; border: 1px solid #999; }
+  table { border-collapse: collapse; }
+  td, th { min-width: 120px; height: 40px; border: 1px solid #ccc; padding: 0 8px; white-space: nowrap; }
+  th:first-child, td:first-child { position: sticky; left: 0; background: #fff; }
+  td.last, th.last { background: #c62828; color: #fff; }
+  .menu { position: absolute; top: 0; left: 100%; width: 400px; height: 600px; background: #1565c0; color: #fff; }
+  .snap { overflow-x: auto; scroll-snap-type: x mandatory; display: flex; width: 500px; height: 200px; margin-top: 20px; }
+  .gallery { overflow-x: auto; display: flex; width: 500px; height: 200px; margin-top: 20px; }
+  .snap > div, .gallery > div { flex: 0 0 100%; scroll-snap-align: start; background: #ffe082; border-right: 4px solid #fff; box-sizing: border-box; }
+  pre { overflow-x: auto; background: #eceff1; padding: 12px; }
+</style></head>
+<body>
+  <header>WIDE-HEADER</header>
+  <div class="menu">OFFCANVAS-MENU</div>
+  <main>
+    <h1>Ratings</h1>
+    <div class="scroll"><table id="ratings"></table></div>
+    <p>TABLE-AFTER</p>
+    <div class="snap" id="snap"></div>
+    <div class="gallery" id="gallery"></div>
+    <pre>const line = "the start of a very long line of code that goes on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on and on"; // CODE-END</pre>
+    <p>PAGE-END</p>
+  </main>
+  <script>
+    const COLS = 24;
+    const table = document.getElementById('ratings');
+    for (let r = 0; r < 12; r++) {
+      const tr = table.insertRow();
+      for (let c = 0; c < COLS; c++) {
+        const cell = document.createElement(r ? 'td' : 'th');
+        const last = c === COLS - 1;
+        cell.textContent = r === 0 ? (c ? (last ? 'COLUMN-LAST' : `Column ${c}`) : 'Product') : (c ? `${r}.${c}` : `Range ${r}`);
+        if (last) cell.className = 'last';
+        tr.appendChild(cell);
+      }
+    }
+    for (const id of ['snap', 'gallery']) {
+      const box = document.getElementById(id);
+      for (let i = 1; i <= 8; i++) {
+        const slide = document.createElement('div');
+        slide.textContent = i === 8 ? 'SLIDE-LAST' : `Slide ${i}`;
+        box.appendChild(slide);
+      }
+    }
+  </script>
+</body></html>

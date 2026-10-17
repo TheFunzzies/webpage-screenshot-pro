@@ -56,6 +56,15 @@ Chrome to render the page as a vector PDF, using the page's on-screen styles.
 - **Hide floating elements** (on by default): hides fixed-position widgets such
   as chat bubbles, cookie banners and popups. Fixed headers and sidebars are
   kept; in Letter/A4 mode they're drawn once instead of on every page.
+- **Include sideways-scrolling areas** (full page, on by default): wide
+  tables and charts that scroll sideways inside the page (like a ratings
+  chart with dozens of columns) are unrolled so every column is captured,
+  and a page that is itself wider than the window is captured at its full
+  width. The page keeps its on-screen layout; the capture just gets wider
+  (up to 8,000 px). Letter/A4 pages are scaled so the full width fits. Long
+  lines in code blocks wrap instead. Carousels and sliders are left as they
+  are. While loading the page, sideways areas are also scrolled once so
+  their lazy content appears.
 - **Save to**: a folder inside Downloads (default `Downloads/Webpage Screenshot Pro`).
   Chrome only lets extensions save inside Downloads. If Chrome's own "Ask where
   to save each file before downloading" setting is on, Chrome shows its Save
@@ -78,7 +87,8 @@ card hides while Chrome renders, so it never appears in the PDF.
 
 1. `content.js` prepares the page: scrolls to load lazy content, freezes
    `100vh`-style heights at their on-screen size, expands app-style inner
-   scroll panels, and turns off animations. Every change is undone afterwards.
+   scroll panels and sideways-scrolling areas, and turns off animations.
+   Every change is undone afterwards.
 2. `background.js` attaches `chrome.debugger`, switches to screen styles
    (`Emulation.setEmulatedMedia`), measures the page, and calls
    `Page.printToPDF` with a paper size that matches the page.
@@ -133,8 +143,20 @@ granted access to tabs up front (what a click grants in real use).
   are left out of the PDF, because Chrome takes minutes to render them.
 - "Hide floating elements" decides by position and size, so now and then it
   may hide something you wanted or keep a banner. Turn it off for that page.
+- "Include sideways-scrolling areas" tells carousels from wide tables by how
+  they behave and what they're called; a carousel it doesn't recognise is
+  laid out in one long row. Turn the option off for that page. Areas that
+  would make the capture wider than 8,000 px keep scrolling as they are.
 
 ## Version history
+
+- **0.9.0**: Captures sideways scrolling too. Full-page PDFs and images now
+  include wide tables and charts that scroll sideways (every column, e.g.
+  Consumer Reports ratings charts) and pages wider than the window, at the
+  page's on-screen layout; Letter/A4 pages scale the full width to fit. New
+  option "Include sideways-scrolling areas" (on by default). Long lines in
+  code blocks wrap instead of being cut off. Fixed script-loaded lazy images
+  sometimes being missed while loading long pages.
 
 - **0.8.0**: New logo (a camera in front of a document, Material style).
   Compression now also works for visible-area and region PDFs (only images in

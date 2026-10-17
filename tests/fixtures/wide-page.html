@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- A page that is itself wider than the window: the whole document scrolls
+     sideways. -->
+<html><head><meta charset="utf-8"><title>Wide Page Fixture</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; }
+  .strip { width: 2600px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .strip div { width: 300px; height: 300px; background: #2e7d32; color: #fff; padding: 12px; box-sizing: border-box; }
+  .strip div:last-child { background: #c62828; }
+  p { margin: 20px; }
+</style></head>
+<body>
+  <p>WIDE-PAGE-START</p>
+  <div class="strip"><div>LEFT-BOX</div><div>MIDDLE-BOX</div><div>PAGE-RIGHT-EDGE</div></div>
+  <p style="height: 1500px">Tall enough to scroll down too.</p>
+  <p>WIDE-PAGE-END</p>
+</body></html>

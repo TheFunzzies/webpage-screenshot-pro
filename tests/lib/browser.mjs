@@ -49,16 +49,19 @@ export async function launch({ downloadDir, headless = true }) {
   );
   const worker = await swTarget.worker();
   const extensionId = new URL(swTarget.url()).host;
-  return new Session(browser, worker, extensionId, downloadDir, profile);
+  // Some sites turn away Chrome that calls itself headless.
+  const userAgent = (await browser.userAgent()).replace('HeadlessChrome', 'Chrome');
+  return new Session(browser, worker, extensionId, downloadDir, profile, userAgent);
 }
 
 class Session {
-  constructor(browser, worker, extensionId, downloadDir, profile) {
-    Object.assign(this, { browser, worker, extensionId, downloadDir, profile });
+  constructor(browser, worker, extensionId, downloadDir, profile, userAgent) {
+    Object.assign(this, { browser, worker, extensionId, downloadDir, profile, userAgent });
   }
 
   async open(url, { settle = 500 } = {}) {
     const page = await this.browser.newPage();
+    await page.setUserAgent(this.userAgent);
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
     await page.bringToFront();
     await sleep(settle);

@@ -7,6 +7,7 @@ const DEFAULTS = {
   stamp: false, // PDF only: page address and date in a header and footer
   loadLazy: true,
   hideFloating: true,
+  sideways: true, // full page: unroll areas that scroll sideways and capture the full width
   folder: 'Webpage Screenshot Pro', // inside Downloads; '' saves to Downloads itself
   nameFormat: 'title-date', // see fileBaseName()
   debugLog: false, // record every step in the debug log, not just errors
