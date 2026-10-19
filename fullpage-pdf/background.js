@@ -976,8 +976,10 @@ async function saveFile(bytes, mime, filename) {
   pendingSaves++;
   try {
     key = crypto.randomUUID();
-    await putFile(key, new Blob([bytes], { type: mime }));
-    // The page may close just as it's found open; try once more if so.
+    const blob = new Blob([bytes], { type: mime });
+    await putFile(key, blob);
+    // The page may close just as it's found open; try once more if so. It
+    // may have taken the file before closing, so hand it over again.
     for (let attempt = 0; !url; attempt++) {
       try {
         await ensureOffscreen();
@@ -986,6 +988,7 @@ async function saveFile(bytes, mime, filename) {
         url = res.url;
       } catch (e) {
         if (attempt >= 1) throw e;
+        await putFile(key, blob);
       }
     }
   } catch (e) {
