@@ -63,7 +63,7 @@ await test('log: error messages keep only the site of addresses', () => {
   assert.equal(entry.message, 'Cannot access contents of url "example.com". Extension manifest must request permission to access this host.');
 });
 
-await test('page count',() => assert.equal(bg('countPdfPages')(makeMinimalPdf()), 1));
+await test('page count', () => assert.equal(bg('countPdfPages')(makeMinimalPdf()), 1));
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);
