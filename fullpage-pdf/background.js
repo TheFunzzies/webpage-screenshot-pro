@@ -48,8 +48,15 @@ const jobs = new Map();
 
 class Cancelled extends Error {}
 
+// Message types the content script sends (about its own tab only); the
+// rest come from the extension's pages (the popup).
+const PAGE_MESSAGES = ['cancel', 'progress'];
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  const tabId = msg?.tabId ?? sender.tab?.id;
+  if (sender.id !== chrome.runtime.id) return;
+  const fromExtensionPage = !!sender.url?.startsWith(chrome.runtime.getURL(''));
+  if (!fromExtensionPage && !(sender.tab && PAGE_MESSAGES.includes(msg?.type))) return;
+  const tabId = fromExtensionPage ? msg?.tabId ?? sender.tab?.id : sender.tab.id;
   switch (msg?.type) {
     case 'capture':
       if (tabId == null || jobs.has(tabId)) {
