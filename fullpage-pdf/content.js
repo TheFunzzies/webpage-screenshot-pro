@@ -733,6 +733,7 @@
   // ---------- Visible area and region ----------
 
   let stopSelecting = null;
+  const REGION_TIMEOUT_MS = 2 * 60 * 1000;
 
   // Lets the person drag out a box over the page. Resolves with the box in
   // viewport CSS pixels, or null for Esc, Stop or a plain click.
@@ -787,7 +788,11 @@
       };
       // Scrolling mid-drag would move the page under the box.
       const noScroll = (e) => e.preventDefault();
+      // Nobody drawing for a long while (the tab was left alone): give up,
+      // so the capture doesn't stay open and block the next one.
+      const timer = setTimeout(() => finish(null), REGION_TIMEOUT_MS);
       function finish(r) {
+        clearTimeout(timer);
         stopSelecting = null;
         host.remove();
         removeEventListener('keydown', onKey, true);

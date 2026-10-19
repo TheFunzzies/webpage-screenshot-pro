@@ -52,6 +52,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = msg?.tabId ?? sender.tab?.id;
   switch (msg?.type) {
     case 'capture':
+      if (tabId == null || jobs.has(tabId)) {
+        sendResponse({ started: false, error: tabId == null ? 'No tab to capture.' : 'Already capturing this tab.' });
+        break;
+      }
       run(tabId, msg.opts);
       sendResponse({ started: true });
       break;

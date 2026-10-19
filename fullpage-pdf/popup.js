@@ -204,9 +204,14 @@ function start(action) {
   showStatus('');
   showRunning(true);
   showProgress('Starting…', 0);
-  chrome.runtime.sendMessage({ type: 'capture', tabId, opts: { ...readControls(), action } });
+  const started = chrome.runtime.sendMessage({ type: 'capture', tabId, opts: { ...readControls(), action } });
   // Get out of the way so the area can be drawn on the page.
   if (settings.mode === 'region') window.close();
+  started.then((res) => {
+    if (res?.started) return;
+    showRunning(false);
+    showStatus(res?.error || 'Something went wrong.', 'err');
+  }, () => {});
 }
 
 // ---------- Save all tabs ----------
