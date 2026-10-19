@@ -338,6 +338,32 @@ if (!live) {
     return `${kb(pdfs[0].bytes)}, then ${kb(pdfs[1].bytes)}`;
   });
 
+  test('a new capture stops an earlier copy still loading the page', async () => {
+    // As if the worker had died mid-load: an injected copy keeps scrolling
+    // through the page while a new capture starts.
+    const { page, tabId } = await session.open(`${base}/lazy.html`);
+    await session.worker.evaluate(async (id) => {
+      await chrome.scripting.executeScript({ target: { tabId: id }, files: ['content.js'] });
+      await chrome.scripting.executeScript({
+        target: { tabId: id },
+        func: () => { window.__fpp.begin({ card: false }); window.__fpp.loadAll({ maxMs: 30000 }); },
+      });
+    }, tabId);
+    await new Promise((r) => setTimeout(r, 500));
+    const before = new Set(listDownloads());
+    const result = await session.worker.evaluate((id, o) => run(id, o), tabId, { format: 'pdf', loadLazy: false });
+    assert.ok(result?.ok, `capture failed: ${result?.error}`);
+    await session.waitForFiles(before, 1);
+    const scrolled = [];
+    for (let i = 0; i < 4; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      scrolled.push(await page.evaluate(() => scrollY));
+    }
+    await page.close();
+    assert.ok(scrolled.every((y) => y === 0), `the earlier copy kept scrolling: ${scrolled.join(' → ')}`);
+    return `scroll after: ${scrolled.join(', ')}`;
+  });
+
   // ---------- Visible area and region ----------
 
   const imageSize = async (file) => {

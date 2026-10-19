@@ -3,10 +3,15 @@
 // shows the progress card, and records every change so restore() puts the
 // page back exactly as it was.
 (() => {
-  // Injected again for every capture: put back whatever the previous copy
-  // changed and take its card down, so nothing of it is in this capture.
+  // Injected again for every capture: stop the previous copy if it's still
+  // at work (loading the page, waiting for a region), then put back
+  // whatever it changed and take its card down, so nothing of it is in
+  // this capture.
   if (window.__fpp) {
     try {
+      // Copies from before 0.9.2 have no cancel(), only the flag.
+      if (window.__fpp.flags) window.__fpp.flags.cancel = true;
+      window.__fpp.cancel?.();
       window.__fpp.restore();
       window.__fpp.removeOverlay();
     } catch {}
