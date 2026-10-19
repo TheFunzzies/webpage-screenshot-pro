@@ -924,22 +924,42 @@ function hasTransparency(ctx, width, height) {
 
 // Hands the file to Chrome's downloader as a blob: URL made by the hidden
 // offscreen page, which avoids building a huge base64 data: URL. Falls back
-// to a data: URL if that route isn't available.
+// to a data: URL if that route isn't available and the file is small
+// enough for one.
+const DATA_URL_MAX_BYTES = 1.5 * 1024 * 1024;
+// Saves that haven't got their blob URL yet; the offscreen page isn't
+// closed while there are any.
+let pendingSaves = 0;
+
 async function saveFile(bytes, mime, filename) {
   let key = null;
   let url;
+  pendingSaves++;
   try {
     key = crypto.randomUUID();
     await putFile(key, new Blob([bytes], { type: mime }));
-    await ensureOffscreen();
-    const res = await chrome.runtime.sendMessage({ type: 'offscreen-blob-url', key });
-    if (!res?.url) throw new Error(res?.error || 'no blob URL');
-    url = res.url;
+    // The page may close just as it's found open; try once more if so.
+    for (let attempt = 0; !url; attempt++) {
+      try {
+        await ensureOffscreen();
+        const res = await chrome.runtime.sendMessage({ type: 'offscreen-blob-url', key });
+        if (!res?.url) throw new Error(res?.error || 'no blob URL');
+        url = res.url;
+      } catch (e) {
+        if (attempt >= 1) throw e;
+      }
+    }
   } catch (e) {
-    log('warn', 'Saving through a data URL instead of a blob URL', errorDetails(e));
     if (key) deleteFile(key).catch(() => {});
     key = null;
+    if (bytes.length > DATA_URL_MAX_BYTES) {
+      log('warn', 'Could not make a blob URL for a large file', errorDetails(e));
+      throw new Error("Couldn't hand the file to Chrome's downloader. Try again.");
+    }
+    log('warn', 'Saving through a data URL instead of a blob URL', errorDetails(e));
     url = `data:${mime};base64,${toBase64(bytes)}`;
+  } finally {
+    pendingSaves--;
   }
   const id = await chrome.downloads.download({ url, filename, conflictAction: 'uniquify' });
   if (key) revokeWhenDone(id, key);
@@ -987,7 +1007,7 @@ function revokeWhenDone(downloadId, key) {
     chrome.downloads.onChanged.removeListener(onChanged);
     clearTimeout(timer);
     chrome.runtime.sendMessage({ type: 'offscreen-revoke', key }).then((res) => {
-      if (res?.left === 0) chrome.offscreen.closeDocument().catch(() => {});
+      if (res?.left === 0 && !pendingSaves) chrome.offscreen.closeDocument().catch(() => {});
     }).catch(() => {});
   };
   const onChanged = (delta) => {
