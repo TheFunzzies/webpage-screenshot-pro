@@ -677,8 +677,8 @@
     for (const img of deepImages()) {
       if (list.length >= limit) break;
       // Broken images are skipped. Ones still loading are included: the
-      // background fetches its own copy, and they'd otherwise finish just in
-      // time to go into the PDF uncompressed.
+      // background reads whatever Chrome already holds for them and leaves
+      // them as they are if that's nothing yet.
       if (img.complete && !img.naturalWidth) continue;
       const src = img.currentSrc || img.src;
       if (!isRasterUrl(src)) continue;
