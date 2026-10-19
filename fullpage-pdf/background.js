@@ -800,9 +800,13 @@ async function readStream(send, handle) {
 // Full-page screenshot, split into parts when the page is very tall.
 async function captureImages(send, call, format, wide, onPart) {
   const page = await measurePage(call);
-  const { h, dpr } = page;
+  const { h } = page;
   const w = Math.max(page.w, wide || 0);
-  const scale = dpr || 1;
+  const dpr = page.dpr || 1;
+  // Wider than MAX_IMAGE_PX device pixels: capture at a lower resolution, so
+  // the image stays within Chrome's and JPEG's size limits.
+  const clipScale = Math.min(1, MAX_IMAGE_PX / (w * dpr));
+  const scale = dpr * clipScale;
   const partH = Math.max(1, Math.floor(Math.min(MAX_IMAGE_PX / scale, MAX_IMAGE_AREA / (w * scale * scale))));
   const parts = Math.max(1, Math.ceil(h / partH));
   const out = [];
@@ -814,7 +818,7 @@ async function captureImages(send, call, format, wide, onPart) {
       ...(format === 'jpeg' ? { quality: IMAGE_JPEG_QUALITY } : {}),
       captureBeyondViewport: true,
       fromSurface: true,
-      clip: { x: 0, y, width: w, height: Math.min(partH, h - y), scale: 1 },
+      clip: { x: 0, y, width: w, height: Math.min(partH, h - y), scale: clipScale },
     });
     out.push(fromBase64(data));
   }
