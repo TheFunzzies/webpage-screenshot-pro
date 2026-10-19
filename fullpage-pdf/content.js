@@ -3,6 +3,15 @@
 // shows the progress card, and records every change so restore() puts the
 // page back exactly as it was.
 (() => {
+  // Injected again for every capture: put back whatever the previous copy
+  // changed and take its card down, so nothing of it is in this capture.
+  if (window.__fpp) {
+    try {
+      window.__fpp.restore();
+      window.__fpp.removeOverlay();
+    } catch {}
+  }
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // rAF stalls in background tabs, so never wait on it alone.
   const frame = () => Promise.race([new Promise((r) => requestAnimationFrame(r)), sleep(50)]);
@@ -849,6 +858,10 @@
   // where it would be in the picture or in the way).
   function begin({ card = true } = {}) {
     restore();
+    // Cards and selection boxes left by an earlier copy of this script (a
+    // reloaded extension, say) would otherwise be captured too.
+    removeOverlay();
+    for (const el of document.querySelectorAll('[data-fpp-overlay]')) el.remove();
     flags.cancel = false;
     flags.skip = false;
     const root = rootScroller();
@@ -866,21 +879,24 @@
     }
   }
 
+  function cancel() {
+    flags.cancel = true;
+    stopSelecting?.();
+  }
+
   // Messages from the background (the popup's Stop button arrives this way).
+  // Registered once; it always talks to the latest copy of this script.
   if (!chrome.runtime.__fppListening) {
     chrome.runtime.__fppListening = true;
     chrome.runtime.onMessage.addListener((msg) => {
-      if (msg?.type === 'fpp-cancel') {
-        flags.cancel = true;
-        stopSelecting?.();
-      }
+      if (msg?.type === 'fpp-cancel') window.__fpp?.cancel();
       if (msg?.type === 'fpp-progress') window.__fpp?.setProgress(msg);
     });
   }
 
   window.__fpp = {
     begin, loadAll, prepare, letPagesBreak, collectImages, applyImages, restore,
-    selectRegion, viewInfo, prepareView, nextFrames,
+    selectRegion, viewInfo, prepareView, nextFrames, cancel,
     setProgress, overlayVisible, removeOverlay, flags,
   };
 })();

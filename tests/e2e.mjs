@@ -319,6 +319,25 @@ if (!live) {
     return note;
   });
 
+  test('same page captured twice in a row', async () => {
+    // The first capture's "Saved" card is still up when the second starts;
+    // it must not end up in the second PDF.
+    const { page, tabId } = await session.open(`${base}/floating.html`);
+    const pdfs = [];
+    for (let i = 0; i < 2; i++) {
+      const before = new Set(listDownloads());
+      const result = await session.worker.evaluate((id, o) => run(id, o), tabId, { format: 'pdf' });
+      assert.ok(result?.ok, `capture ${i + 1} failed: ${result?.error}`);
+      pdfs.push(await readPdf((await session.waitForFiles(before, 1))[0]));
+    }
+    const cards = await page.evaluate(() => document.querySelectorAll('[data-fpp-overlay]').length);
+    await page.close();
+    assert.match(pdfs[1].text, /FOOTER-MARKER/);
+    assert.doesNotMatch(pdfs[1].text, /Check your downloads|Webpage Screenshot Pro/, 'the first capture\'s card is in the second PDF');
+    assert.ok(cards <= 1, `${cards} progress cards on the page`);
+    return `${kb(pdfs[0].bytes)}, then ${kb(pdfs[1].bytes)}`;
+  });
+
   // ---------- Visible area and region ----------
 
   const imageSize = async (file) => {
