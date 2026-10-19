@@ -1011,20 +1011,33 @@ async function copyToClipboard(tabId, png) {
   }
 }
 
+// Which blob URL each download uses, also kept in session storage so it
+// can still be released after the service worker has been restarted.
+const downloadKeys = new Map();
+const downloadEntry = (id) => `download-${id}`;
+
 function revokeWhenDone(downloadId, key) {
-  const finish = () => {
-    chrome.downloads.onChanged.removeListener(onChanged);
-    clearTimeout(timer);
-    chrome.runtime.sendMessage({ type: 'offscreen-revoke', key }).then((res) => {
-      if (res?.left === 0 && !pendingSaves) chrome.offscreen.closeDocument().catch(() => {});
-    }).catch(() => {});
-  };
-  const onChanged = (delta) => {
-    if (delta.id === downloadId && ['complete', 'interrupted'].includes(delta.state?.current)) finish();
-  };
-  chrome.downloads.onChanged.addListener(onChanged);
-  // A Save As dialog left open shouldn't pin the file in memory forever.
-  const timer = setTimeout(finish, 10 * 60 * 1000);
+  downloadKeys.set(downloadId, key);
+  chrome.storage.session.set({ [downloadEntry(downloadId)]: key }).catch(() => {});
+  // A Save As dialog left open shouldn't pin the file in memory forever
+  // (while this worker lives; after a restart the listener below does it).
+  setTimeout(() => releaseDownload(downloadId), 10 * 60 * 1000);
+}
+
+// Registered at the top level, so it's also called in a restarted worker.
+chrome.downloads.onChanged.addListener((delta) => {
+  if (['complete', 'interrupted'].includes(delta.state?.current)) releaseDownload(delta.id);
+});
+
+async function releaseDownload(downloadId) {
+  const entry = downloadEntry(downloadId);
+  let key = downloadKeys.get(downloadId);
+  downloadKeys.delete(downloadId);
+  if (!key) key = (await chrome.storage.session.get(entry).catch(() => ({})))[entry];
+  if (!key) return;
+  chrome.storage.session.remove(entry).catch(() => {});
+  const res = await chrome.runtime.sendMessage({ type: 'offscreen-revoke', key }).catch(() => null);
+  if (res?.left === 0 && !pendingSaves) chrome.offscreen.closeDocument().catch(() => {});
 }
 
 let creatingOffscreen = null;

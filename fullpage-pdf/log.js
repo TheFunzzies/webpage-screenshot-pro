@@ -23,13 +23,20 @@ function log(level, event, details = {}) {
   logTimer ??= setTimeout(flushLog, 500);
 }
 
-async function flushLog() {
+// One write at a time: two overlapping read-then-write flushes would each
+// keep only their own new entries.
+let logWriting = Promise.resolve();
+
+function flushLog() {
   logTimer = null;
-  const batch = logQueue;
-  logQueue = [];
-  if (!batch.length) return;
-  const { [LOG_KEY]: old = [] } = await chrome.storage.local.get(LOG_KEY);
-  await chrome.storage.local.set({ [LOG_KEY]: [...old, ...batch].slice(-LOG_MAX) });
+  logWriting = logWriting.then(async () => {
+    const batch = logQueue;
+    logQueue = [];
+    if (!batch.length) return;
+    const { [LOG_KEY]: old = [] } = await chrome.storage.local.get(LOG_KEY);
+    await chrome.storage.local.set({ [LOG_KEY]: [...old, ...batch].slice(-LOG_MAX) });
+  }).catch(() => {});
+  return logWriting;
 }
 
 function siteOf(url) {
