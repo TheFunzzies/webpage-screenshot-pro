@@ -219,10 +219,14 @@ function showBatch({ index, total, title }) {
   $('batchLine').title = title;
 }
 
-$('saveAll').addEventListener('click', () => {
+$('saveAll').addEventListener('click', async () => {
   // Other tabs can only be read with the all-sites permission. Ask now,
-  // during the click (Chrome requires that); the background waits for it.
-  chrome.permissions.request({ origins: ['<all_urls>'] }).catch(() => false);
+  // during the click (Chrome requires that), and start only once it's given.
+  const granted = await chrome.permissions.request({ origins: ['<all_urls>'] }).catch(() => false);
+  if (!granted) {
+    showStatus('Saving all tabs needs permission to read your open tabs. Click "Save all tabs" again and choose Allow.', 'err');
+    return;
+  }
   if (!$('folderEdit').hidden) commitFolder();
   showStatus('');
   batchRunning = true;

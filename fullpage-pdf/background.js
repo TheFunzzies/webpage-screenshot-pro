@@ -446,8 +446,8 @@ async function saveAllTabs(windowId, opts) {
   let original;
   try {
     // Reading other tabs needs the all-sites permission; the popup asks for
-    // it on the click, and Chrome's prompt may still be open.
-    if (!(await waitForAllSites(60000))) {
+    // it on the click and only starts once it's given.
+    if (!(await chrome.permissions.contains({ origins: ['<all_urls>'] }))) {
       throw new Error('Saving all tabs needs permission to read your open tabs. Click "Save all tabs" again and choose Allow.');
     }
     const tabs = await chrome.tabs.query({ windowId });
@@ -495,21 +495,6 @@ function cancelBatch() {
 function sendBatch() {
   const { windowId, index, total, title } = batch;
   chrome.runtime.sendMessage({ type: 'batch', windowId, index, total, title }).catch(() => {});
-}
-
-async function waitForAllSites(timeout) {
-  const has = () => chrome.permissions.contains({ origins: ['<all_urls>'] });
-  if (await has()) return true;
-  return new Promise((resolve) => {
-    const done = (ok) => {
-      chrome.permissions.onAdded.removeListener(onAdded);
-      clearTimeout(timer);
-      resolve(ok);
-    };
-    const onAdded = async () => { if (await has()) done(true); };
-    chrome.permissions.onAdded.addListener(onAdded);
-    const timer = setTimeout(() => done(false), timeout);
-  });
 }
 
 function waitForTabLoad(tabId, timeout) {
