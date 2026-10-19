@@ -48,6 +48,10 @@ const jobs = new Map();
 
 class Cancelled extends Error {}
 
+// Pages with no <body> (a bare SVG or XML file) can't be prepared for a
+// full page or a PDF; images of the visible area or a region still work.
+const NO_BODY = "This page isn't a regular web page (it has no body, like an SVG or XML file), so it can only be saved as an image of the visible area or a region.";
+
 // Message types the content script sends (about its own tab only); the
 // rest come from the extension's pages (the popup).
 const PAGE_MESSAGES = ['cancel', 'progress'];
@@ -231,6 +235,7 @@ async function capture(tabId, opts, job) {
   }
 
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
+  if (!(await call(() => !!document.body))) throw new Error(NO_BODY);
   await call(() => window.__fpp.begin());
 
   try {
@@ -369,6 +374,7 @@ async function captureView({ tab, opts, job, target, call, check, send, format, 
 
     let outputs;
     if (format === 'pdf') {
+      if (!(await call(() => !!document.body))) throw new Error(NO_BODY);
       // Prepare before attaching the debugger: its "started debugging" bar
       // takes some of the window, which would move pinned elements.
       report(tabId, 'Preparing the page…', STEPS.prepare);
