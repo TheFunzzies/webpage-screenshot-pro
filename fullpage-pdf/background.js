@@ -1130,6 +1130,7 @@ function formatSize(bytes) {
 
 function friendlyError(e) {
   const msg = String(e?.message || e);
+  if (/extensions gallery cannot be scripted/i.test(msg)) return 'Chrome does not let extensions capture Chrome Web Store pages.';
   if (/Cannot access|cannot be scripted|chrome-extension:|chrome:\/\//i.test(msg)) {
     return 'Chrome does not let extensions capture this page. For local files, turn on "Allow access to file URLs" for this extension.';
   }
