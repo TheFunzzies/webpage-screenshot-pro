@@ -674,10 +674,12 @@
   function collectImages({ backgrounds = false, limit = 400 } = {}) {
     images.clear();
     const list = [];
-    const add = (kind, el, src, rect, flatten) => {
+    // natW/natH: the image's own size when already known (loaded <img>s),
+    // so the background can size huge ones down while decoding them.
+    const add = (kind, el, src, rect, flatten, natW, natH) => {
       const id = String(images.size);
       images.set(id, { kind, el });
-      list.push({ id, kind, src, dispW: rect.width, dispH: rect.height, pageLeft: rect.left + scrollX, pageTop: rect.top + scrollY, flatten });
+      list.push({ id, kind, src, dispW: rect.width, dispH: rect.height, pageLeft: rect.left + scrollX, pageTop: rect.top + scrollY, flatten, natW, natH });
     };
     for (const img of deepImages()) {
       if (list.length >= limit) break;
@@ -689,7 +691,7 @@
       if (!isRasterUrl(src)) continue;
       const rect = img.getBoundingClientRect();
       if (rect.width < 24 || rect.height < 24) continue;
-      add('img', img, src, rect, backdropColor(img, false));
+      add('img', img, src, rect, backdropColor(img, false), img.naturalWidth, img.naturalHeight);
     }
     if (backgrounds) {
       for (const el of deepElements()) {

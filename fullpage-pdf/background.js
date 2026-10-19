@@ -22,8 +22,9 @@ const MAX_IMAGE_PX = 16000;
 // decoded), so wide captures on high-density screens get shorter parts.
 const MAX_IMAGE_AREA = 64e6;
 const IMAGE_JPEG_QUALITY = 90;
-// Compression leaves images bigger than this many pixels as they are:
-// decoding and checking them takes hundreds of MB each.
+// Compression never works on a picture bigger than this many pixels (each
+// copy takes 160 MB or more). Bigger <img>s are decoded straight to their
+// smaller size; bigger ones of unknown size are left as they are.
 const MAX_SHRINK_AREA = 40e6;
 // Images compressed at the same time.
 const SHRINK_CONCURRENCY = 2;
@@ -884,25 +885,44 @@ async function shrinkImage(item, level, source) {
   // Go by the file's first bytes; servers don't always label JPEGs right.
   const head = new Uint8Array(await blob.slice(0, 3).arrayBuffer());
   const isJpeg = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
-  const original = await createImageBitmap(blob);
-  const nw = original.width;
-  const nh = original.height;
-  if (nw * nh > MAX_SHRINK_AREA) {
-    original.close();
-    return null;
+  const scaleFor = (nw, nh) => Math.min(1, level.factor * Math.max(item.dispW / nw, item.dispH / nh));
+  const sizeAt = (n, scale) => Math.max(1, Math.round(n * scale));
+  let original;
+  let nw;
+  let nh;
+  // Decided before decoding: a huge image whose size the page reported is
+  // decoded straight to the size it's needed at, so it's never held here at
+  // full size. One that wouldn't shrink enough is left as it is.
+  const presized = item.natW * item.natH > MAX_SHRINK_AREA;
+  if (presized) {
+    nw = item.natW;
+    nh = item.natH;
+    const scale = scaleFor(nw, nh);
+    if (scale >= level.resizeBelow || sizeAt(nw, scale) * sizeAt(nh, scale) > MAX_SHRINK_AREA) return null;
+    original = await createImageBitmap(blob, { resizeWidth: sizeAt(nw, scale), resizeHeight: sizeAt(nh, scale), resizeQuality: 'high' });
+  } else {
+    original = await createImageBitmap(blob);
+    nw = original.width;
+    nh = original.height;
+    // Size only known now (CSS backgrounds, images still loading): too big
+    // to work on further.
+    if (nw * nh > MAX_SHRINK_AREA) {
+      original.close();
+      return null;
+    }
   }
 
-  const scale = Math.min(1, level.factor * Math.max(item.dispW / nw, item.dispH / nh));
-  const resize = scale < level.resizeBelow;
+  const scale = scaleFor(nw, nh);
+  const resize = presized || scale < level.resizeBelow;
   // A JPEG at the right size already goes into the PDF as is.
   if (isJpeg && !resize && !level.reencodeJpeg) {
     original.close();
     return null;
   }
 
-  const w = resize ? Math.max(1, Math.round(nw * scale)) : nw;
-  const h = resize ? Math.max(1, Math.round(nh * scale)) : nh;
-  const bitmap = resize ? await createImageBitmap(original, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }) : original;
+  const w = presized ? original.width : resize ? sizeAt(nw, scale) : nw;
+  const h = presized ? original.height : resize ? sizeAt(nh, scale) : nh;
+  const bitmap = resize && !presized ? await createImageBitmap(original, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }) : original;
   const canvas = new OffscreenCanvas(w, h);
   const ctx = canvas.getContext('2d');
   ctx.drawImage(bitmap, 0, 0);
