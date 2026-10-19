@@ -38,7 +38,7 @@ HANDLES REAL-WORLD PAGES
 • Prints pinned headers and sidebars once, and unrolls scrolling sidebars like long tables of contents.
 • Captures wide tables and charts that scroll sideways, every column, plus pages wider than the window.
 • Works with app-style pages that scroll inside a panel (mail, notebooks, docs).
-• Very long pages load in seconds; a progress bar with Stop and "Save now" keeps you in control.
+• Very long pages load quickly (endless feeds stop after 30 seconds); a progress bar with Stop and "Save now" keeps you in control.
 
 MORE
 • Save all open tabs in one click.
