@@ -51,7 +51,19 @@ await test('PDF properties: unknown layout left untouched', () => {
   assert.equal(bg('addPdfInfo')(junk, { title: 't', url: 'u' }), junk);
 });
 
-await test('page count', () => assert.equal(bg('countPdfPages')(makeMinimalPdf()), 1));
+await test('log: error messages keep only the site of addresses', () => {
+  const { error } = console;
+  console.error = () => {};
+  try {
+    bg('log')('error', 'Capture failed', { message: 'Cannot access contents of url "https://example.com/reset?token=abc". Extension manifest must request permission to access this host.' });
+  } finally {
+    console.error = error;
+  }
+  const entry = bg('logQueue').at(-1);
+  assert.equal(entry.message, 'Cannot access contents of url "example.com". Extension manifest must request permission to access this host.');
+});
+
+await test('page count',() => assert.equal(bg('countPdfPages')(makeMinimalPdf()), 1));
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

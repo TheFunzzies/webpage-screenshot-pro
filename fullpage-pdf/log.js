@@ -4,6 +4,7 @@
 // With "Debug logging" on, every step is recorded too, with full addresses.
 const LOG_KEY = 'logs';
 const LOG_MAX = 500;
+const URL_IN_TEXT = /\b(?:https?|file):\/\/[^\s"'<>)]+/gi;
 let logQueue = [];
 let logTimer = null;
 let verboseLog = false;
@@ -16,7 +17,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 function log(level, event, details = {}) {
   if (level === 'debug' && !verboseLog) return;
   const entry = { t: Date.now(), level, event, ...details };
-  if (entry.url && !verboseLog) entry.url = siteOf(entry.url);
+  if (!verboseLog) {
+    if (entry.url) entry.url = siteOf(entry.url);
+    // Chrome's own error messages can quote the page's full address
+    // ("Cannot access contents of url …"); keep only the site there too.
+    for (const k of ['message', 'stack']) {
+      if (typeof entry[k] === 'string') entry[k] = entry[k].replace(URL_IN_TEXT, (u) => siteOf(u) || 'file');
+    }
+  }
   const out = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
   out('[Webpage Screenshot Pro]', event, details);
   logQueue.push(entry);
