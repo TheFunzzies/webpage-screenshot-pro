@@ -280,14 +280,14 @@ async function capture(tabId, opts, job) {
           report(tabId, `Rendering PDF… ${s} s`, STEPS.render, { busy: true });
         }, 1000);
         try {
-          const pdf = await printToPdf(send, opts.layout, opts.stamp, width);
+          const pdf = await printToPdf(send, call, opts.layout, opts.stamp, width);
           outputs = [addPdfInfo(pdf, { title: tab.title, url: tab.url })];
         } finally {
           clearInterval(ticker);
         }
       } else {
         report(tabId, 'Capturing image…', STEPS.render);
-        outputs = await captureImages(send, format, width, (i, n) => {
+        outputs = await captureImages(send, call, format, width, (i, n) => {
           if (n > 1) report(tabId, `Capturing image… part ${i + 1} of ${n}`, STEPS.render + ((STEPS.save - STEPS.render) * i) / n);
         });
       }
@@ -374,7 +374,7 @@ async function captureView({ tab, opts, job, target, call, check, send, format, 
         }
         check();
         report(tabId, 'Rendering PDF…', STEPS.render, { busy: true });
-        const pdf = await printView(send, view, region);
+        const pdf = await printView(send, call, view, region);
         outputs = [addPdfInfo(pdf, { title: tab.title, url: tab.url })];
       } finally {
         job.debugging = false;
@@ -395,9 +395,9 @@ async function captureView({ tab, opts, job, target, call, check, send, format, 
 
 // The page has been shifted so the area starts at the top; print one page
 // as tall as the area at the page's normal width, then trim it to the area.
-async function printView(send, view, region) {
+async function printView(send, call, view, region) {
   await send('Emulation.setEmulatedMedia', { media: 'screen' });
-  const { w } = await measurePage(send);
+  const { w } = await measurePage(call);
   const { stream } = await send('Page.printToPDF', {
     printBackground: true,
     preferCSSPageSize: false,
@@ -520,15 +520,13 @@ function waitForTabLoad(tabId, timeout) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function measurePage(send) {
-  const { result } = await send('Runtime.evaluate', {
-    expression: `(() => {
-      const d = document.documentElement, b = document.body;
-      return { w: d.clientWidth, h: Math.max(d.scrollHeight, b ? b.scrollHeight : 0), dpr: devicePixelRatio };
-    })()`,
-    returnByValue: true,
+// Measured in the extension's isolated world, where the site's scripts
+// can't redefine clientWidth, scrollHeight or devicePixelRatio.
+function measurePage(call) {
+  return call(() => {
+    const d = document.documentElement, b = document.body;
+    return { w: d.clientWidth, h: Math.max(d.scrollHeight, b ? b.scrollHeight : 0), dpr: devicePixelRatio };
   });
-  return result.value;
 }
 
 // Header (page title, date) and footer (address, page number) for the
@@ -540,10 +538,10 @@ const stampTemplate = (left, right) =>
 
 // wide: the width to capture when the page or areas in it scroll sideways
 // (0: the window's width).
-async function printToPdf(send, layout, stamp = false, wide = 0) {
+async function printToPdf(send, call, layout, stamp = false, wide = 0) {
   // Use the on-screen styles, not the site's print stylesheet.
   await send('Emulation.setEmulatedMedia', { media: 'screen' });
-  const page = await measurePage(send);
+  const page = await measurePage(call);
   const w = Math.max(page.w, wide || 0);
   const { h } = page;
 
@@ -782,8 +780,8 @@ async function readStream(send, handle) {
 }
 
 // Full-page screenshot, split into parts when the page is very tall.
-async function captureImages(send, format, wide, onPart) {
-  const page = await measurePage(send);
+async function captureImages(send, call, format, wide, onPart) {
+  const page = await measurePage(call);
   const { h, dpr } = page;
   const w = Math.max(page.w, wide || 0);
   const scale = dpr || 1;
