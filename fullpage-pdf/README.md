@@ -150,6 +150,11 @@ granted access to tabs up front (what a click grants in real use).
 
 ## Version history
 
+- **0.9.2**: Fixed leftover progress cards appearing in later captures and
+  improved Save all tabs permission handling. Reduced memory use for large
+  images and very wide captures, improved download reliability and error
+  messages, and limited error-log addresses to the site when Debug logging
+  is off. Requires Chrome 118 or later.
 - **0.9.1**: Fixed long pages coming out with near-blank pages in PDFs.
   Sites built on older grid frameworks (e.g. Yale Appliance's blog) lay the
   whole article out as one inline-block, which Chrome won't split across
