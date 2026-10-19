@@ -18,7 +18,15 @@ const MARGIN_IN = 0.4;
 // Images taller than this (in device pixels) are saved in several parts:
 // Chrome's screenshots get unreliable beyond it, and JPEG tops out at 65,535.
 const MAX_IMAGE_PX = 16000;
+// Each part is also kept below this many device pixels (about 256 MB
+// decoded), so wide captures on high-density screens get shorter parts.
+const MAX_IMAGE_AREA = 64e6;
 const IMAGE_JPEG_QUALITY = 90;
+// Compression leaves images bigger than this many pixels as they are:
+// decoding and checking them takes hundreds of MB each.
+const MAX_SHRINK_AREA = 40e6;
+// Images compressed at the same time.
+const SHRINK_CONCURRENCY = 2;
 
 // How hard each compression level squeezes images. `factor` is the image
 // resolution relative to its on-screen size; `resizeBelow` skips resizing
@@ -778,7 +786,8 @@ async function captureImages(send, format, wide, onPart) {
   const page = await measurePage(send);
   const { h, dpr } = page;
   const w = Math.max(page.w, wide || 0);
-  const partH = Math.floor(MAX_IMAGE_PX / (dpr || 1));
+  const scale = dpr || 1;
+  const partH = Math.max(1, Math.floor(Math.min(MAX_IMAGE_PX / scale, MAX_IMAGE_AREA / (w * scale * scale))));
   const parts = Math.max(1, Math.ceil(h / partH));
   const out = [];
   for (let i = 0; i < parts; i++) {
@@ -850,7 +859,7 @@ async function shrinkImages(list, level, source, job, onProgress) {
       onProgress(++done);
     }
   };
-  await Promise.all(Array.from({ length: 6 }, worker));
+  await Promise.all(Array.from({ length: SHRINK_CONCURRENCY }, worker));
   return out;
 }
 
@@ -863,6 +872,10 @@ async function shrinkImage(item, level, source) {
   const original = await createImageBitmap(blob);
   const nw = original.width;
   const nh = original.height;
+  if (nw * nh > MAX_SHRINK_AREA) {
+    original.close();
+    return null;
+  }
 
   const scale = Math.min(1, level.factor * Math.max(item.dispW / nw, item.dispH / nh));
   const resize = scale < level.resizeBelow;
