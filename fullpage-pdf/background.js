@@ -371,7 +371,7 @@ async function captureMarkdown({ tab, opts, job, target, call, check, send, copy
   await call((card) => window.__fpp.begin({ card }), full);
   try {
     let area = null;
-    if (full && opts.loadLazy) {
+    if (full && opts.mdLoadLazy) {
       await chrome.debugger.attach(target, '1.3');
       job.debugging = true;
       try {

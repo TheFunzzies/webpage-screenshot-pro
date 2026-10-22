@@ -29,10 +29,22 @@
   // A table holding any of these is a layout table: its cells are read as
   // ordinary blocks rather than squeezed into a Markdown table.
   const LAYOUT_SIGNS = 'table, h1, h2, h3, h4, h5, h6, ul, ol, pre, blockquote, hr, dl';
-  // Math as Wikipedia, KaTeX and MathJax show it, and plain MathML.
-  const MATH_WRAPPERS = '.mwe-math-element, .katex, mjx-container, math';
 
   // ---------- Text helpers (pure; also used by the unit tests) ----------
+
+  // Loops rather than Math.max(...list): spreading a huge list (a table
+  // with tens of thousands of rows) overflows the call stack.
+  function longestRun(text, re) {
+    let longest = 0;
+    for (const m of text.matchAll(re)) if (m[0].length > longest) longest = m[0].length;
+    return longest;
+  }
+
+  function longestRow(grid) {
+    let cols = 0;
+    for (const row of grid) if (row.length > cols) cols = row.length;
+    return cols;
+  }
 
   // pdfmd's escape_markdown: backslash, backtick, * _ { } [ ] < > and |.
   // Periods, parentheses, hyphens, # and ! are left alone.
@@ -59,7 +71,7 @@
   function inlineCode(code) {
     const text = code.replace(/\s+/g, ' ');
     if (!text.trim()) return '';
-    const longest = Math.max(0, ...(text.match(/`+/g) || []).map((r) => r.length));
+    const longest = longestRun(text, /`+/g);
     const ticks = '`'.repeat(longest + 1);
     const pad = /^`|`$/.test(text) ? ' ' : '';
     return `${ticks}${pad}${text}${pad}${ticks}`;
@@ -69,7 +81,7 @@
   function codeBlock(code, lang = '') {
     const body = code.replace(/\r\n?/g, '\n').replace(/^\n+|\s+$/g, '');
     if (!body) return '';
-    const longest = Math.max(0, ...(body.match(/^`{3,}/gm) || []).map((r) => r.length));
+    const longest = longestRun(body, /^`{3,}/gm);
     const fence = '`'.repeat(Math.max(3, longest + 1));
     return `${fence}${lang}\n${body}\n${fence}`;
   }
@@ -82,7 +94,7 @@
   // right-aligned; everything else left.
   function columnAlignments(grid) {
     if (grid.length < 2) return [];
-    const cols = Math.max(...grid.map((r) => r.length));
+    const cols = longestRow(grid);
     const out = [];
     for (let c = 0; c < cols; c++) {
       let numeric = 0;
@@ -104,7 +116,7 @@
   // `plain` the same cells as plain text (for the alignment guess). Rows
   // are padded, never truncated; the first row is the header.
   function renderTable(cells, plain = cells) {
-    const cols = Math.max(0, ...cells.map((r) => r.length));
+    const cols = longestRow(cells);
     if (!cols) return '';
     const pad = (row) => [...row, ...Array(cols - row.length).fill('')];
     // Lone pipes are border leftovers; any other | must not split a column.
@@ -126,6 +138,7 @@
 
   // Collapses the spaces of an inline run; keeps hard breaks ("\" + newline).
   function tidyInline(s) {
+    if (!s.includes('\\\n')) return s.replace(/\s+/g, ' ').trim();
     return s.replace(/\\\n/g, '\u0001')
       .replace(/\s+/g, ' ')
       .replace(/ *\u0001 */g, '\u0001')
@@ -181,32 +194,66 @@
       if (!area) return true;
       if (node.nodeType === Node.ELEMENT_NODE) return intersects(node.getBoundingClientRect());
       range.selectNodeContents(node);
-      return [...range.getClientRects()].some(intersects);
+      const rects = range.getClientRects();
+      for (let i = 0; i < rects.length; i++) if (intersects(rects[i])) return true;
+      return false;
+    };
+    // Only custom elements get closed shadow roots in practice; asking the
+    // extension API about every <div> costs more than it finds.
+    const shadowRoot = (el) => {
+      if (el.shadowRoot) return el.shadowRoot;
+      if (!el.localName.includes('-')) return null;
+      try { return globalThis.chrome?.dom?.openOrClosedShadowRoot?.(el) || null; } catch { return null; }
     };
 
     // Shadow DOM (open or closed) and slotted content, as the page draws it.
-    function children(el) {
+    function walkChildren(el, b) {
       if (el.localName === 'slot') {
         const assigned = el.assignedNodes({ flatten: true });
-        return assigned.length ? assigned : [...el.childNodes];
+        if (assigned.length) {
+          for (const node of assigned) walk(node, b);
+          return;
+        }
       }
-      let root = null;
-      try { root = globalThis.chrome?.dom?.openOrClosedShadowRoot?.(el) ?? el.shadowRoot; } catch {}
-      return [...(root || el).childNodes];
+      // A closed <details> shows only its summary.
+      if (el.localName === 'details' && !el.open) {
+        const summary = el.querySelector(':scope > summary');
+        if (summary) walk(summary, b);
+        return;
+      }
+      for (let node = (shadowRoot(el) || el).firstChild; node; node = node.nextSibling) walk(node, b);
     }
 
+    // Outside the region: boxes rarely draw text beyond their edges, so
+    // the whole subtree is left out without checking each line.
+    function outside(el, style) {
+      if (!area || style.position === 'fixed' || style.display === 'contents') return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && !intersects(r);
+    }
+
+    // An element (list item, table row or cell) checked on its own.
+    function hidden(el) {
+      const style = getComputedStyle(el);
+      const visibility = style.visibility;
+      return style.display === 'none' || visibility === 'hidden' || visibility === 'collapse' || skipped(el, style);
+    }
+
+    // `style` has been checked for display: none and hidden visibility.
     function skipped(el, style) {
       const tag = el.localName;
-      if (SKIP.has(tag) || el.hasAttribute('data-fpp-overlay')) return true;
-      if (el.getAttribute('aria-hidden') === 'true' || el.hidden) return true;
-      if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return true;
-      if (style.display !== 'contents' && el.checkVisibility && !el.checkVisibility()) return true;
-      if (hideFloating && style.position === 'fixed') return true;
+      if (SKIP.has(tag) || el.hidden) return true;
+      if (el.hasAttribute('aria-hidden') && el.getAttribute('aria-hidden') === 'true') return true;
+      if (el.hasAttribute('data-fpp-overlay')) return true;
+      if (style.contentVisibility === 'hidden') return true;
+      const position = style.position;
+      if (hideFloating && position === 'fixed') return true;
       // Text only screen readers get ("opens in a new window").
-      if (style.position === 'absolute' && /hidden|clip/.test(style.overflow)) {
+      if (position === 'absolute' && style.overflow !== 'visible') {
         const r = el.getBoundingClientRect();
         if (r.width <= 1 && r.height <= 1) return true;
       }
+      if (outside(el, style)) return true;
       if (mainOnly) {
         const role = el.getAttribute('role');
         if (tag === 'nav' || CHROME_ROLES.has(role)) return true;
@@ -218,28 +265,33 @@
       return false;
     }
 
-    const isBlock = (el, style) => BLOCK_TAGS.has(el.localName)
-      || !/^(inline|contents|ruby|none)/.test(style.display || 'inline');
+    const isBlock = (tag, display) => BLOCK_TAGS.has(tag)
+      || !(display.startsWith('inline') || display === 'contents' || display.startsWith('ruby'));
 
-    function walkChildren(el, b) {
-      for (const child of children(el)) walk(child, b);
-    }
+    // Math as Wikipedia, KaTeX and MathJax show it, and plain MathML.
+    const isMath = (el, tag) => tag === 'math' || tag === 'mjx-container'
+      || (el.classList.length > 0 && (el.classList.contains('mwe-math-element') || el.classList.contains('katex')));
 
     function walk(node, b) {
       if (node.nodeType === Node.TEXT_NODE) {
-        if (node.data.trim() && inArea(node)) b.text(escapeText(node.data.replace(/\s+/g, ' ')));
-        else if (/\s/.test(node.data)) b.text(' ');
+        const data = node.data;
+        if (/\S/.test(data) && inArea(node)) b.text(escapeText(data.replace(/\s+/g, ' ')));
+        else if (data) b.text(' ');
         return;
       }
       if (node.nodeType !== Node.ELEMENT_NODE) return;
       const el = node;
       const style = getComputedStyle(el);
+      const display = style.display;
+      if (display === 'none') return;
+      const visibility = style.visibility;
+      if (visibility === 'hidden' || visibility === 'collapse') return;
+      const tag = el.localName;
       // Math renderers show a picture or styled spans hidden from screen
       // readers, and hide the MathML with the TeX: read the wrapper whole.
-      if (el.matches(MATH_WRAPPERS) && style.display !== 'none' && style.visibility !== 'hidden') return math(el, b);
+      if (isMath(el, tag)) return math(el, b);
       if (skipped(el, style)) return;
-      const tag = el.localName;
-      const block = isBlock(el, style);
+      const block = isBlock(tag, display);
 
       switch (tag) {
         case 'br':
@@ -336,9 +388,12 @@
       const ordered = el.localName === 'ol';
       let n = ordered ? (el.hasAttribute('start') ? el.start : 1) : 0;
       const items = []; // { text, indent }
-      for (const child of children(el)) {
-        if (child.nodeType !== Node.ELEMENT_NODE) continue;
-        if (skipped(child, getComputedStyle(child))) continue;
+      for (let child = (shadowRoot(el) || el).firstElementChild; child; child = child.nextElementSibling) {
+        if (hidden(child)) {
+          // Items off screen still count, so numbers match the page.
+          if (ordered && child.localName === 'li' && outside(child, getComputedStyle(child))) n++;
+          continue;
+        }
         // A list straight inside a list (not in an <li>) belongs to the item before it.
         if (child.localName === 'ul' || child.localName === 'ol') {
           const nested = list(child);
@@ -367,8 +422,9 @@
       const href = el.href ? String(el.href) : '';
       if (!text) return;
       let md = text;
-      if (href && !/^\s*javascript:/i.test(href)) {
-        md = text === escapeText(href) ? `<${href}>` : `[${text}](${target(href)})`;
+      if (href && !href.startsWith('javascript:')) {
+        // Escaping only lengthens, so a shorter text can't be the address.
+        md = text.length >= href.length && text === escapeText(href) ? `<${href}>` : `[${text}](${target(href)})`;
       }
       if (block && !b.inline) b.block(md);
       else b.text(md);
@@ -376,10 +432,11 @@
 
     function image(el, b, block) {
       if (area && !inArea(el)) return;
-      const src = el.currentSrc || el.src || '';
+      const src = imageSource(el);
       const alt = (el.getAttribute('alt') || '').replace(/\s+/g, ' ').trim();
-      // Tracking pixels and spacers.
-      if (el.complete && el.naturalWidth && el.naturalWidth <= 2 && el.naturalHeight <= 2) return;
+      // Tracking pixels and spacers (but not a lazy image's placeholder).
+      const shown = el.currentSrc || el.src || '';
+      if (src === shown && el.complete && el.naturalWidth && el.naturalWidth <= 2 && el.naturalHeight <= 2) return;
       // Inline data would bury the text under kilobytes of base64.
       if (!src || src.startsWith('data:')) {
         if (alt) b.text(escapeText(alt));
@@ -388,6 +445,18 @@
       const md = `![${escapeText(alt)}](${target(src)})`;
       if (block && !b.inline) b.block(md);
       else b.text(md);
+    }
+
+    // The picture's address. Lazy loaders keep the real one in a data-
+    // attribute until the image scrolls into view, so the page doesn't have
+    // to be scrolled through just to name its images.
+    function imageSource(el) {
+      const src = el.currentSrc || el.src || '';
+      if (src && !src.startsWith('data:')) return src;
+      const lazy = el.getAttribute('data-src') || el.getAttribute('data-lazy-src') || el.getAttribute('data-original')
+        || (el.getAttribute('data-srcset') || '').trim().split(/\s+/)[0];
+      if (!lazy) return src;
+      try { return new URL(lazy, document.baseURI).href; } catch { return src; }
     }
 
     // MathML, or a renderer's wrapper around it, as $TeX$ (or $$…$$ on its
@@ -418,36 +487,30 @@
     }
 
     function table(el, b) {
-      const rows = [...el.rows].filter((r) => !skipped(r, getComputedStyle(r)));
+      const rows = [...el.rows].filter((r) => !hidden(r));
       const layout = el.getAttribute('role') === 'presentation'
         || rows.length < 2
         || el.querySelector(LAYOUT_SIGNS);
       // Cells laid out as a grid, with spanned cells left empty.
       const grid = [];
-      const plain = [];
       if (!layout) {
         rows.forEach((row, r) => {
           grid[r] ??= [];
-          plain[r] ??= [];
           let c = 0;
           for (const cell of row.cells) {
             while (grid[r][c] !== undefined) c++;
-            const text = skipped(cell, getComputedStyle(cell)) ? '' : cellText(cell);
+            const text = hidden(cell) ? '' : cellText(cell);
             const span = Math.min(cell.colSpan || 1, 50);
             const down = Math.min(cell.rowSpan || 1, rows.length - r);
             for (let dr = 0; dr < down; dr++) {
               grid[r + dr] ??= [];
-              plain[r + dr] ??= [];
-              for (let dc = 0; dc < span; dc++) {
-                grid[r + dr][c + dc] = dr === 0 && dc === 0 ? text : '';
-                plain[r + dr][c + dc] = dr === 0 && dc === 0 && text ? cell.textContent : '';
-              }
+              for (let dc = 0; dc < span; dc++) grid[r + dr][c + dc] = dr === 0 && dc === 0 ? text : '';
             }
             c += span;
           }
         });
       }
-      const cols = Math.max(0, ...grid.map((r) => r.length));
+      const cols = longestRow(grid);
       // Rows with something in them; in a region, the ones on screen.
       const keep = grid.map((r) => r.some((t) => t));
       // One column, or nothing in it: not really a table.
@@ -456,7 +519,7 @@
         return;
       }
       const rect = (g) => g.filter((_, i) => keep[i]).map((r) => Array.from({ length: cols }, (_, i) => r[i] ?? ''));
-      b.block(renderTable(rect(grid), rect(plain)), 'table');
+      b.block(renderTable(rect(grid)), 'table');
     }
 
     // A cell on one line; its line breaks become <br>.
@@ -472,11 +535,14 @@
     function contentRoot() {
       const body = document.body;
       if (!mainOnly || !body) return body;
-      const total = body.innerText.length;
-      const visible = (el) => el.checkVisibility ? el.checkVisibility() : el.offsetParent !== null;
+      // textContent needs no layout, unlike innerText; script text counts
+      // too, but only as a rough share of the page.
+      let total = -1;
       const pick = (sel) => {
-        const found = [...document.querySelectorAll(sel)].filter(visible);
-        return found.length === 1 && found[0].innerText.length > Math.max(200, total * 0.2) ? found[0] : null;
+        const found = [...document.querySelectorAll(sel)].filter((el) => el.getClientRects().length > 0);
+        if (found.length !== 1) return null;
+        if (total < 0) total = body.textContent.length;
+        return found[0].textContent.length > Math.max(200, total * 0.2) ? found[0] : null;
       };
       return pick('main, [role="main"]') || pick('article') || body;
     }

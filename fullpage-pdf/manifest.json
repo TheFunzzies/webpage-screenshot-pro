@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Webpage Screenshot Pro",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "minimum_chrome_version": "118",
   "description": "Save a whole web page, the visible area or a region you draw, as a small searchable PDF, a JPEG/PNG image or Markdown text.",
   "permissions": [

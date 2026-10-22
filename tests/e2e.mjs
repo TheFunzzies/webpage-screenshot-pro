@@ -190,7 +190,7 @@ if (!live) {
   }
 
   test('Markdown: full page', async () => {
-    const { md, ms } = await markdownOf({ loadLazy: false });
+    const { md, ms } = await markdownOf({});
     const has = (text) => assert.ok(md.includes(text), `missing ${JSON.stringify(text)} in:\n${md}`);
     const lacks = (text) => assert.ok(!md.includes(text), `unexpected ${JSON.stringify(text)} in:\n${md}`);
     has('# Apple pie\n\nA **classic** pie with *tart* apples and ***lots*** of butter.');
@@ -206,6 +206,8 @@ if (!live) {
     has('| Item | Price | Note |\n| :--- | ---: | :--- |\n| Apples | $4.50 | Fresh \\| local |\n| Butter | 3 | Line one<br>line two |\n| Total |  | 7.50 |');
     has('\n\nLayout cell text.\n\n');
     has('![A \\[golden\\] pie](');
+    has('![A slice](http');
+    has('/lazy-slice.jpg)');
     has('*The finished pie*\n\n---\n\nDiv soup line one\n\nDiv soup line two');
     has('Far down the page.');
     for (const text of ['Home', 'Copyright footer', 'Chat with us', 'Hidden item', 'Aria hidden', 'opens in a new tab', 'title:']) lacks(text);
@@ -213,13 +215,13 @@ if (!live) {
   });
 
   test('Markdown: menus, footer and front matter kept when asked', async () => {
-    const { md } = await markdownOf({ loadLazy: false, mainOnly: false, hideFloating: false, stamp: true });
+    const { md } = await markdownOf({ mainOnly: false, hideFloating: false, stamp: true });
     assert.match(md, /^---\ntitle: "Markdown test page"\nsource: "http[^"]+\/markdown\.html"\nsaved: \d{4}-\d\d-\d\d \d\d:\d\d\n---\n\n/);
     for (const text of ['[Home](', 'Copyright footer', 'Chat with us']) assert.ok(md.includes(text), `missing ${text}`);
   });
 
   test('Markdown: lazy loading still gives the text', async () => {
-    const { md, ms } = await markdownOf({ loadLazy: true });
+    const { md, ms } = await markdownOf({ mdLoadLazy: true });
     assert.ok(md.includes('# Apple pie') && md.includes('Far down the page.'));
     return `${ms} ms`;
   });
@@ -243,7 +245,7 @@ if (!live) {
   test('Markdown: copy puts the text on the clipboard', async () => {
     const context = session.browser.defaultBrowserContext();
     await context.overridePermissions(base, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
-    const run = await session.capture(`${base}/markdown.html`, { format: 'md', action: 'copy', loadLazy: false });
+    const run = await session.capture(`${base}/markdown.html`, { format: 'md', action: 'copy' });
     try {
       assert.ok(run.result.ok, run.result.error);
       assert.ok(run.result.copied, `not copied: ${run.result.note}`);
