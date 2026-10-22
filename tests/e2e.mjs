@@ -178,6 +178,83 @@ if (!live) {
     }
   });
 
+  // ---------- Markdown ----------
+
+  async function markdownOf(opts, extra) {
+    const run = await session.capture(`${base}/markdown.html`, { format: 'md', ...opts }, extra);
+    await run.page.close();
+    assert.ok(run.result?.ok, `capture failed: ${run.result?.error}`);
+    assert.equal(run.files.length, 1, 'expected one Markdown file');
+    assert.match(run.files[0], /\.md$/);
+    return { ...run, md: fs.readFileSync(run.files[0], 'utf8') };
+  }
+
+  test('Markdown: full page', async () => {
+    const { md, ms } = await markdownOf({ loadLazy: false });
+    const has = (text) => assert.ok(md.includes(text), `missing ${JSON.stringify(text)} in:\n${md}`);
+    const lacks = (text) => assert.ok(!md.includes(text), `unexpected ${JSON.stringify(text)} in:\n${md}`);
+    has('# Apple pie\n\nA **classic** pie with *tart* apples and ***lots*** of butter.');
+    has('[the old recipe](<https://example.com/pie%20(old)>)');
+    has('or <https://example.com/>.');
+    has('Prices use \\* and \\_ and \\| characters, and `` a|b `c` `` is code.\\\nThis line comes after a break.');
+    has('1\\. This paragraph starts like a list item.');
+    has('Area a<sup>2</sup> of H<sub>2</sub>O is $a+b$ and $x^2$.');
+    has('## Ingredients\n\n- 6 apples\n  - Granny Smith\n  - Honeycrisp\n- [x] Butter\n\n## Steps');
+    has('3. Peel the apples.\n\n   Slice them thin.\n4. Bake.');
+    has('> Best pie I ever had.\n>\n> — A reader');
+    has('```js\nfunction bake(pie) {\n  return pie;\n\n}\n```');
+    has('| Item | Price | Note |\n| :--- | ---: | :--- |\n| Apples | $4.50 | Fresh \\| local |\n| Butter | 3 | Line one<br>line two |\n| Total |  | 7.50 |');
+    has('\n\nLayout cell text.\n\n');
+    has('![A \\[golden\\] pie](');
+    has('*The finished pie*\n\n---\n\nDiv soup line one\n\nDiv soup line two');
+    has('Far down the page.');
+    for (const text of ['Home', 'Copyright footer', 'Chat with us', 'Hidden item', 'Aria hidden', 'opens in a new tab', 'title:']) lacks(text);
+    return `${ms} ms, ${md.length} characters`;
+  });
+
+  test('Markdown: menus, footer and front matter kept when asked', async () => {
+    const { md } = await markdownOf({ loadLazy: false, mainOnly: false, hideFloating: false, stamp: true });
+    assert.match(md, /^---\ntitle: "Markdown test page"\nsource: "http[^"]+\/markdown\.html"\nsaved: \d{4}-\d\d-\d\d \d\d:\d\d\n---\n\n/);
+    for (const text of ['[Home](', 'Copyright footer', 'Chat with us']) assert.ok(md.includes(text), `missing ${text}`);
+  });
+
+  test('Markdown: lazy loading still gives the text', async () => {
+    const { md, ms } = await markdownOf({ loadLazy: true });
+    assert.ok(md.includes('# Apple pie') && md.includes('Far down the page.'));
+    return `${ms} ms`;
+  });
+
+  test('Markdown: visible area leaves out what is below the window', async () => {
+    const { md } = await markdownOf({ mode: 'visible' });
+    assert.ok(md.includes('# Apple pie'), md);
+    assert.ok(!md.includes('Far down the page.'), md);
+  });
+
+  test('Markdown: region holds only what is in the box', async () => {
+    // The box around the ingredients list, as the page first opens.
+    const { page } = await session.open(`${base}/markdown.html`);
+    const r = await page.$eval('h2 + ul', (ul) => ul.getBoundingClientRect().toJSON());
+    await page.close();
+    const { md } = await markdownOf({ mode: 'region', region: { x: r.x, y: r.y, w: r.width, h: r.height } });
+    assert.ok(md.includes('- 6 apples') && md.includes('Honeycrisp'), md);
+    assert.ok(!md.includes('Apple pie') && !md.includes('Steps'), md);
+  });
+
+  test('Markdown: copy puts the text on the clipboard', async () => {
+    const context = session.browser.defaultBrowserContext();
+    await context.overridePermissions(base, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
+    const run = await session.capture(`${base}/markdown.html`, { format: 'md', action: 'copy', loadLazy: false });
+    try {
+      assert.ok(run.result.ok, run.result.error);
+      assert.ok(run.result.copied, `not copied: ${run.result.note}`);
+      const text = await run.page.evaluate(() => navigator.clipboard.readText());
+      assert.ok(text.startsWith('# Apple pie'), text.slice(0, 200));
+      return `${text.length} characters on the clipboard`;
+    } finally {
+      await run.page.close();
+    }
+  });
+
   test('Stop cancels without saving', async () => {
     const run = await session.capture(`${base}/lazy.html`, {}, { cancelAfterMs: 300 });
     await run.page.close();
@@ -556,6 +633,14 @@ if (!live) {
     assert.equal(await page.$eval('#loadLazy', (c) => c.closest('label').hidden), true);
     assert.equal(await page.$eval('#sideways', (c) => c.closest('label').hidden), true);
     await page.select('#mode', 'full');
+    await page.select('#format', 'md');
+    assert.equal(await page.$eval('#go', (b) => b.textContent), 'Save as Markdown');
+    assert.equal(await page.$eval('#mainOnly', (c) => c.closest('label').hidden), false);
+    assert.equal(await page.$eval('#stamp', (c) => c.closest('label').hidden), false);
+    assert.equal(await page.$eval('#sideways', (c) => c.closest('label').hidden), true);
+    assert.equal(await page.$eval('#layout', (s) => s.closest('label').hidden), true);
+    assert.match(await page.$eval('#copy', (b) => b.title), /Markdown text/);
+    await page.select('#format', 'png');
     await page.click('#more summary');
     await page.select('#nameFormat', 'title-datetime');
     assert.match(await page.$eval('#nameExample', (e) => e.textContent), /\d{4}-\d\d-\d\d \d\d\.\d\d\.png$/);
@@ -588,6 +673,19 @@ if (live) {
     const { pdf, note } = await pdfOf('https://en.wikipedia.org/wiki/United_States');
     assert.match(pdf.text, /External links/);
     return note;
+  });
+
+  test('live: Wikipedia article as Markdown', async () => {
+    const run = await session.capture('https://en.wikipedia.org/wiki/Pythagorean_theorem', { format: 'md' });
+    await run.page.close();
+    assert.ok(run.result.ok, run.result.error);
+    const md = fs.readFileSync(run.files[0], 'utf8');
+    assert.match(md, /^# Pythagorean theorem/m);
+    assert.match(md, /^## Proofs/m);
+    assert.match(md, /^\$\$\na\^\{2\}\+b\^\{2\}=c\^\{2\}\.?\n\$\$$/m, 'the equation as TeX');
+    assert.match(md, /\*a\*<sup>2<\/sup>/, 'superscripts');
+    assert.doesNotMatch(md, /Jump to content|Main menu/, 'menus left out');
+    return `${run.ms} ms, ${Math.round(md.length / 1024)} KB`;
   });
 
   test('live: Consumer Reports ratings chart is captured sideways', async () => {

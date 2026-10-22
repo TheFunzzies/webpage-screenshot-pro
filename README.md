@@ -1,7 +1,8 @@
 # Webpage Screenshot Pro
 
 A Chrome extension that saves a whole web page, the visible area or a region
-you draw as a small PDF with real, searchable text, or as a JPEG or PNG image.
+you draw as a small PDF with real, searchable text, as a JPEG or PNG image, or
+as Markdown text.
 
 - **Privacy policy:** https://thefunzzies.github.io/webpage-screenshot-pro/privacy-policy.html
 - **Contact:** stoneforestdesign@gmail.com

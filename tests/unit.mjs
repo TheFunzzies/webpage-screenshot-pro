@@ -1,7 +1,7 @@
 // Fast checks of the extension's helpers; no browser needed.
 // Run: npm run unit
 import assert from 'node:assert/strict';
-import { loadBackground } from './lib/extension.mjs';
+import { loadBackground, loadMarkdown } from './lib/extension.mjs';
 import { pdfInfo } from './lib/pdf.mjs';
 
 const bg = loadBackground();
@@ -64,6 +64,44 @@ await test('log: error messages keep only the site of addresses', () => {
 });
 
 await test('page count', () => assert.equal(bg('countPdfPages')(makeMinimalPdf()), 1));
+
+// ---------- Markdown (markdown.js) ----------
+
+const md = loadMarkdown();
+await test('markdown: escapes only what breaks Markdown', () => assert.equal(md.escapeText('a*b_c [d] <e> |f| `g` 1.5 (h) #i!'), 'a\\*b\\_c \\[d\\] \\<e\\> \\|f\\| \\`g\\` 1.5 (h) #i!'));
+await test('markdown: lines that look like markup are escaped', () => {
+  assert.equal(md.escapeLineStarts('1. not a list\n# not a heading\n- not an item\n#tag stays\n-5 stays'), '1\\. not a list\n\\# not a heading\n\\- not an item\n#tag stays\n-5 stays');
+});
+await test('markdown: bold and italic markers keep spaces outside', () => {
+  assert.equal(md.wrapInline('Note: ', '**'), '**Note:** ');
+  assert.equal(md.wrapInline(md.wrapInline('both', '*'), '**'), '***both***');
+  assert.equal(md.wrapInline('  ', '*'), '  ');
+});
+await test('markdown: inline code and fences outlast backticks inside', () => {
+  assert.equal(md.inlineCode('a `b` c'), '``a `b` c``');
+  assert.equal(md.inlineCode('`x'), '`` `x ``');
+  assert.equal(md.codeBlock('x\n```\ny\n', 'js'), '````js\nx\n```\ny\n````');
+});
+await test('markdown: table with header, escaped pipes and number columns right-aligned', () => {
+  const cells = [['Item', 'Price'], ['Apples', '$4.50'], ['Pears | figs', '(3)'], ['Butter', '12%']];
+  assert.equal(md.renderTable(cells), [
+    '| Item | Price |',
+    '| :--- | ---: |',
+    '| Apples | $4.50 |',
+    '| Pears \\| figs | (3) |',
+    '| Butter | 12% |',
+  ].join('\n'));
+});
+await test('markdown: short rows padded, already-escaped pipes left alone', () => {
+  assert.equal(md.renderTable([['a', 'b', 'c'], ['x \\| y'], ['|', '2', '3']]), [
+    '| a | b | c |', '| :--- | ---: | ---: |', '| x \\| y |  |  |', '|  | 2 | 3 |',
+  ].join('\n'));
+});
+await test('markdown: list item lines indented under the marker', () => assert.equal(md.prefixLines('one\n\ntwo', '10. ', '    '), '10. one\n\n    two'));
+await test('markdown: inline runs tidied, hard breaks kept', () => assert.equal(md.tidyInline('  a \n  b  \\\n  c \\\n'), 'a b\\\nc'));
+await test('markdown: front matter', () => {
+  assert.equal(md.frontMatter('Pie: "best"', 'https://example.com/a', when), '---\ntitle: "Pie: \\"best\\""\nsource: "https://example.com/a"\nsaved: 2026-10-08 14:05\n---\n\n');
+});
 
 console.log(failed ? `\n${failed} failed` : '\nall passed');
 process.exit(failed ? 1 : 0);

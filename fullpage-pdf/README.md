@@ -1,7 +1,8 @@
 # Webpage Screenshot Pro
 
 Saves an entire web page, just the visible area, or a region you draw, as a
-small PDF with real, searchable, selectable text, or as a JPEG/PNG image. Instead of stitching screenshots, it asks
+small PDF with real, searchable, selectable text, as a JPEG/PNG image, or as
+Markdown text. Instead of stitching screenshots, it asks
 Chrome to render the page as a vector PDF, using the page's on-screen styles.
 
 ## Install (unpacked)
@@ -30,9 +31,19 @@ Chrome to render the page as a vector PDF, using the page's on-screen styles.
   area, or a region you drag out. Visible area and region capture what's on
   screen right now, including anything floating over the page. As images
   they're an exact screenshot; as PDFs the text stays real text.
-- **Save as**: PDF (searchable text), JPEG or PNG. Images are a picture of the
-  page, so their text isn't searchable. Pages taller than 16,000 pixels are
-  saved as several images ("part 1 of 3" and so on).
+- **Save as**: PDF (searchable text), JPEG, PNG or Markdown. Images are a
+  picture of the page, so their text isn't searchable. Pages taller than
+  16,000 pixels are saved as several images ("part 1 of 3" and so on).
+  Markdown saves the page's text as a `.md` file: headings, paragraphs, bold
+  and italic, lists (nested, numbered, checkboxes), quotes, code blocks (with
+  their language), tables, links, images (linked to their address on the
+  web), superscripts (`<sup>`) and math (as `$TeX$`). Visible area and region
+  keep only the text on
+  screen or in the box. With Markdown, **Copy** puts the text on the
+  clipboard instead of an image.
+- **Main content only** (Markdown, full page, on by default): leaves out
+  menus, banners, page footers and sidebars, and uses the page's main
+  article when it has one.
 - **Layout** (PDF): one long page (looks like a full-page screenshot), or
   Letter / A4 pages.
 - **Compression** (PDF): how much to squeeze the page's images.
@@ -48,7 +59,9 @@ Chrome to render the page as a vector PDF, using the page's on-screen styles.
   taken from what the page already loaded, so nothing is downloaded twice and
   no extra permission is needed.
 - **Add page address and date** (PDF): a small header (page title, date) and
-  footer (address, page number) on every page.
+  footer (address, page number) on every page. For Markdown: the title,
+  address and save time at the top, as front matter (`title:`, `source:`,
+  `saved:`) that note apps like Obsidian read.
 - **Load the whole page first**: scrolls through the page so lazy images and
   scroll-triggered content load. The window is made 10x taller while it does
   this, so even very long pages load in a few seconds (up to 30 s for endless
@@ -95,6 +108,16 @@ card hides while Chrome renders, so it never appears in the PDF.
 3. The PDF is streamed back and handed to `chrome.downloads` as a blob URL made
    by a hidden offscreen page (`offscreen.html`), with no base64 copy in between.
    Images come from `Page.captureScreenshot` with `captureBeyondViewport`.
+4. Markdown skips steps 2-3: `markdown.js` reads the page as it's shown
+   (computed styles, so hidden text, screen-reader-only text and `<div>`
+   layouts are handled like a reader sees them; shadow DOM included) and
+   writes Markdown directly. Its formatting rules follow
+   [pdfmd](https://github.com/M1ck4/pdfmd) (MIT): `***bold italic***`,
+   `- ` / `1. ` lists, pipe tables with the first row as header, escaped `|`
+   in cells, number columns right-aligned, and only the characters that break
+   Markdown escaped. pdfmd itself is a Python desktop app that has to guess
+   structure from a PDF's fonts and positions, so it can't run in an
+   extension, and a web page states its structure outright.
 
 Things that cost file size but change nothing visible are skipped during
 capture: do-nothing CSS filters like `blur(0px)` (they make Chrome flatten
@@ -148,7 +171,18 @@ granted access to tabs up front (what a click grants in real use).
   laid out in one long row. Turn the option off for that page. Areas that
   would make the capture wider than 8,000 px keep scrolling as they are.
 
+- Markdown: images and links point at their web addresses (images aren't
+  downloaded). Tables used for layout, or with lists or headings in their
+  cells, come out as plain paragraphs. Text drawn in `<canvas>` or inside
+  `<iframe>`s isn't included. A region keeps whole lines and paragraphs that
+  reach into the box.
+
 ## Version history
+
+- **0.10.0**: Save as Markdown: the page's text as a `.md` file, for the full
+  page, the visible area or a region, with headings, lists, tables, code,
+  links, images and math. "Main content only" option. Copy puts Markdown
+  text on the clipboard. Formatting rules adapted from pdfmd (MIT).
 
 - **0.9.2**: Fixed leftover progress cards appearing in later captures and
   improved Save all tabs permission handling. Reduced memory use for large

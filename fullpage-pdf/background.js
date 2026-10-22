@@ -38,8 +38,8 @@ const COMPRESSION = {
   high: { factor: 1, quality: 0.65, resizeBelow: 0.95, reencodeJpeg: true, flatten: true, backgrounds: true },
 };
 
-const MIME = { pdf: 'application/pdf', jpeg: 'image/jpeg', png: 'image/png' };
-const EXT = { pdf: 'pdf', jpeg: 'jpg', png: 'png' };
+const MIME = { pdf: 'application/pdf', jpeg: 'image/jpeg', png: 'image/png', md: 'text/markdown' };
+const EXT = { pdf: 'pdf', jpeg: 'jpg', png: 'png', md: 'md' };
 
 // Progress ranges for each step, in percent.
 const STEPS = { load: [0, 60], prepare: 62, shrink: [64, 78], render: 80, save: 95 };
@@ -52,6 +52,7 @@ class Cancelled extends Error {}
 // Pages with no <body> (a bare SVG or XML file) can't be prepared for a
 // full page or a PDF; images of the visible area or a region still work.
 const NO_BODY = "This page isn't a regular web page (it has no body, like an SVG or XML file), so it can only be saved as an image of the visible area or a region.";
+const NO_TEXT = "This page isn't a regular web page (it has no body, like an SVG or XML file), so it has no text to save as Markdown.";
 
 // Message types the content script sends (about its own tab only); the
 // rest come from the extension's pages (the popup).
@@ -125,7 +126,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'capture') run(tab.id, { ...settings, mode: 'full' });
   if (info.menuItemId === 'visible') run(tab.id, { ...settings, mode: 'visible' });
   if (info.menuItemId === 'region') run(tab.id, { ...settings, mode: 'region' });
-  if (info.menuItemId === 'copy') run(tab.id, { ...settings, mode: 'full', action: 'copy' });
+  if (info.menuItemId === 'copy') run(tab.id, { ...settings, mode: 'full', action: 'copy', format: 'png' });
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -226,11 +227,15 @@ async function capture(tabId, opts, job) {
       throw e;
     }
   };
-  // Copying always captures a PNG: it's the image type the clipboard takes.
+  // Copying captures a PNG (the image type the clipboard takes), or with
+  // Markdown, copies the text.
   const copying = opts.action === 'copy';
-  const format = copying ? 'png' : opts.format;
+  const format = copying && opts.format !== 'md' ? 'png' : opts.format;
   const isPdf = format === 'pdf';
 
+  if (format === 'md') {
+    return captureMarkdown({ tab, opts, job, target, call, check, send, copying });
+  }
   if (opts.mode === 'visible' || opts.mode === 'region') {
     return captureView({ tab, opts, job, target, call, check, send, format, copying });
   }
@@ -244,22 +249,7 @@ async function capture(tabId, opts, job) {
     job.debugging = true;
     check();
 
-    if (opts.loadLazy) {
-      report(tabId, 'Loading the whole page…', STEPS.load[0]);
-      const screenH = await call(() => innerHeight);
-      await send('Emulation.setDeviceMetricsOverride', {
-        width: 0,
-        height: Math.min(screenH * TALL_VIEWPORT_SCREENS, TALL_VIEWPORT_MAX_PX),
-        deviceScaleFactor: 0,
-        mobile: false,
-      });
-      try {
-        await call((o) => window.__fpp.loadAll(o), { maxMs: MAX_LOAD_MS, from: STEPS.load[0], to: STEPS.load[1], sideways: opts.sideways });
-      } finally {
-        await send('Emulation.clearDeviceMetricsOverride').catch(() => {});
-      }
-      check();
-    }
+    if (opts.loadLazy) await loadWholePage({ tabId, call, send, check, sideways: opts.sideways });
 
     report(tabId, 'Preparing the page…', STEPS.prepare);
     const { photos, width } = await call((o) => window.__fpp.prepare(o), {
@@ -321,14 +311,34 @@ async function capture(tabId, opts, job) {
   }
 }
 
-// Saves the finished files (or copies the image), named per the settings.
+// Scrolls through the page, with the window made very tall, so lazy images
+// and scroll-triggered content load. Needs the debugger attached.
+async function loadWholePage({ tabId, call, send, check, sideways }) {
+  report(tabId, 'Loading the whole page…', STEPS.load[0]);
+  const screenH = await call(() => innerHeight);
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 0,
+    height: Math.min(screenH * TALL_VIEWPORT_SCREENS, TALL_VIEWPORT_MAX_PX),
+    deviceScaleFactor: 0,
+    mobile: false,
+  });
+  try {
+    await call((o) => window.__fpp.loadAll(o), { maxMs: MAX_LOAD_MS, from: STEPS.load[0], to: STEPS.load[1], sideways });
+  } finally {
+    await send('Emulation.clearDeviceMetricsOverride').catch(() => {});
+  }
+  check();
+}
+
+// Saves the finished files (or copies the image or text), named per the settings.
 async function deliver({ tab, opts, format, copying, outputs, photos }) {
   const tabId = tab.id;
   let note;
   if (copying) {
     if (outputs.length === 1) {
       report(tabId, 'Copying…', STEPS.save);
-      if (await copyToClipboard(tabId, outputs[0])) return { size: outputs[0].length, photos, files: 1, copied: true };
+      const type = format === 'md' ? 'text/plain' : 'image/png';
+      if (await copyToClipboard(tabId, outputs[0], type)) return { size: outputs[0].length, photos, files: 1, copied: true };
       note = "Couldn't copy to the clipboard, so it was saved instead.";
       log('warn', 'Clipboard copy failed; saved instead');
     } else {
@@ -346,6 +356,62 @@ async function deliver({ tab, opts, format, copying, outputs, photos }) {
     size += outputs[i].length;
   }
   return { size, photos, files: outputs.length, note };
+}
+
+// ---------- Markdown ----------
+
+// Markdown is read from the page itself (markdown.js), not from a PDF of
+// it, so there's nothing to render: the page is loaded in full first if
+// asked, a region is drawn as for images, and the text is saved or copied.
+async function captureMarkdown({ tab, opts, job, target, call, check, send, copying }) {
+  const tabId = tab.id;
+  const full = opts.mode === 'full';
+  await chrome.scripting.executeScript({ target, files: ['content.js', 'markdown.js'] });
+  if (!(await call(() => !!document.body))) throw new Error(NO_TEXT);
+  await call((card) => window.__fpp.begin({ card }), full);
+  try {
+    let area = null;
+    if (full && opts.loadLazy) {
+      await chrome.debugger.attach(target, '1.3');
+      job.debugging = true;
+      try {
+        check();
+        await loadWholePage({ tabId, call, send, check, sideways: false });
+      } finally {
+        job.debugging = false;
+        await chrome.debugger.detach(target).catch(() => {});
+      }
+    } else if (!full) {
+      // Tests pass a region in; otherwise the person draws one.
+      area = opts.region || null;
+      if (opts.mode === 'region' && !area) {
+        report(tabId, 'Drag to select an area on the page…', null, { busy: true });
+        area = await call(() => window.__fpp.selectRegion());
+        if (!area) {
+          job.cancelled = true;
+          throw new Cancelled();
+        }
+      }
+      const view = await call(() => window.__fpp.viewInfo());
+      area ??= { x: 0, y: 0, w: view.vw, h: view.vh };
+      log('debug', 'Capture area', { region: area, view });
+    }
+    check();
+    report(tabId, 'Reading the page…', STEPS.render);
+    const md = await call((o) => window.__fppMarkdown.pageToMarkdown(o), {
+      area,
+      mainOnly: opts.mainOnly,
+      hideFloating: full && opts.hideFloating,
+      stamp: opts.stamp,
+    });
+    if (!md.replace(/^---\n[\s\S]*?\n---\n/, '').trim()) {
+      throw new Error(area ? 'There is no text in that area to save.' : 'There is no text on this page to save.');
+    }
+    check();
+    return await deliver({ tab, opts, format: 'md', copying, outputs: [new TextEncoder().encode(md)], photos: 0 });
+  } finally {
+    await call(() => window.__fpp.restore()).catch(() => {});
+  }
 }
 
 // ---------- Visible area and region ----------
@@ -1007,13 +1073,13 @@ async function saveFile(bytes, mime, filename) {
   if (key) revokeWhenDone(id, key);
 }
 
-// Puts a PNG on the clipboard. Writing needs a focused page: the popup when
+// Puts a PNG (or text) on the clipboard. Writing needs a focused page: the popup when
 // it's open (it started the copy), otherwise the tab itself (right-click
 // menu or keyboard shortcut).
-async function copyToClipboard(tabId, png) {
+async function copyToClipboard(tabId, bytes, type = 'image/png') {
   const key = crypto.randomUUID();
   try {
-    await putFile(key, new Blob([png], { type: 'image/png' }));
+    await putFile(key, new Blob([bytes], { type }));
     const res = await chrome.runtime.sendMessage({ type: 'clipboard-write', key }).catch(() => null);
     if (res?.ok) return true;
   } catch {
@@ -1024,14 +1090,14 @@ async function copyToClipboard(tabId, png) {
   try {
     const [r] = await chrome.scripting.executeScript({
       target: { tabId },
-      args: [toBase64(png)],
-      func: async (b64) => {
+      args: [toBase64(bytes), type],
+      func: async (b64, type) => {
         const bin = atob(b64);
         const bytes = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
         try {
           window.focus();
-          await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([bytes], { type: 'image/png' }) })]);
+          await navigator.clipboard.write([new ClipboardItem({ [type]: new Blob([bytes], { type }) })]);
           return true;
         } catch {
           return false;

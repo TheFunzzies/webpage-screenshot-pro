@@ -12,7 +12,7 @@ let tabId;
 let windowId;
 let tab = { title: 'Page title', url: 'https://example.com/' };
 let batchRunning = false;
-const EXT = { pdf: 'pdf', jpeg: 'jpg', png: 'png' };
+const EXT = { pdf: 'pdf', jpeg: 'jpg', png: 'png', md: 'md' };
 
 function readControls() {
   settings = {
@@ -22,6 +22,7 @@ function readControls() {
     layout: $('layout').value,
     compression: $('compression').value,
     stamp: $('stamp').checked,
+    mainOnly: $('mainOnly').checked,
     nameFormat: $('nameFormat').value,
     loadLazy: $('loadLazy').checked,
     hideFloating: $('hideFloating').checked,
@@ -38,6 +39,7 @@ function render() {
   $('layout').value = settings.layout;
   $('compression').value = settings.compression;
   $('stamp').checked = settings.stamp;
+  $('mainOnly').checked = settings.mainOnly;
   $('nameFormat').value = settings.nameFormat;
   $('nameExample').textContent = `${fileBaseName(tab.title, tab.url, settings.nameFormat)}.${EXT[settings.format]}`;
   $('nameExample').title = $('nameExample').textContent;
@@ -46,12 +48,21 @@ function render() {
   $('sideways').checked = settings.sideways;
   $('compressionHint').textContent = COMPRESSION_HINTS[settings.compression] || '';
   // Show only what applies: data-show="pdf full" means PDF and full page.
-  const applies = { pdf: settings.format === 'pdf', full: settings.mode === 'full' };
+  const md = settings.format === 'md';
+  const applies = {
+    pdf: settings.format === 'pdf',
+    md,
+    full: settings.mode === 'full',
+    picture: !md,
+    stamp: md || (settings.format === 'pdf' && settings.mode === 'full'),
+  };
   for (const el of document.querySelectorAll('[data-show]')) {
     el.hidden = !el.dataset.show.split(' ').every((need) => applies[need]);
   }
+  $('stampHint').textContent = md ? 'The page title, address and date at the top.' : 'A small header and footer on every page.';
   $('go').textContent = settings.mode === 'region' ? `Select region (${FORMAT_NAMES[settings.format]})` : `Save as ${FORMAT_NAMES[settings.format]}`;
-  $('copy').title = { full: 'Copy the full page', visible: 'Copy the visible area', region: 'Select a region and copy it' }[settings.mode] + ' to the clipboard as an image';
+  $('copy').title = { full: 'Copy the full page', visible: 'Copy the visible area', region: 'Select a region and copy it' }[settings.mode]
+    + (md ? ' to the clipboard as Markdown text' : ' to the clipboard as an image');
   $('folderText').textContent = settings.folder ? `Downloads › ${settings.folder.split('/').join(' › ')}` : 'Downloads';
   $('folderText').title = $('folderText').textContent;
 }
@@ -105,7 +116,7 @@ function formatSize(bytes) {
   }
 })();
 
-for (const id of ['mode', 'format', 'layout', 'stamp', 'nameFormat', 'loadLazy', 'hideFloating', 'sideways', 'debugLog']) {
+for (const id of ['mode', 'format', 'layout', 'stamp', 'mainOnly', 'nameFormat', 'loadLazy', 'hideFloating', 'sideways', 'debugLog']) {
   $(id).addEventListener('change', () => {
     readControls();
     render();
@@ -256,11 +267,12 @@ $('copy').addEventListener('click', () => start('copy'));
 // ---------- Clipboard ----------
 
 // The background can't write to the clipboard; the popup can while it has
-// focus. The image arrives through IndexedDB (messages can't carry binary).
+// focus. The image (or Markdown text) arrives through IndexedDB (messages
+// can't carry binary).
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type !== 'clipboard-write' || !document.hasFocus()) return;
   readFile(msg.key)
-    .then((blob) => navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]))
+    .then((blob) => navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]))
     .then(() => sendResponse({ ok: true }), (e) => sendResponse({ ok: false, error: String(e) }));
   return true;
 });

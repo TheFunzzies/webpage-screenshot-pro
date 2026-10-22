@@ -86,6 +86,7 @@
         <option value="pdf">PDF (searchable text)</option>
         <option value="jpeg">JPEG image</option>
         <option value="png">PNG image</option>
+        <option value="md">Markdown (text)</option>
       </select>
     </label>
     <label class="field" data-show="pdf full">Layout
@@ -105,13 +106,15 @@
       <span class="hint" id="compressionHint"></span>
     </label>
     <div class="checks">
-      <label data-show="pdf full"><input type="checkbox" id="stamp">
-        <span>Add page address and date<br><span class="hint">A small header and footer on every page.</span></span></label>
+      <label data-show="stamp"><input type="checkbox" id="stamp">
+        <span>Add page address and date<br><span class="hint" id="stampHint">A small header and footer on every page.</span></span></label>
+      <label data-show="md full"><input type="checkbox" id="mainOnly">
+        <span>Main content only<br><span class="hint">Leaves out menus, banners, footers and sidebars.</span></span></label>
       <label data-show="full"><input type="checkbox" id="loadLazy">
         <span>Load the whole page first<br><span class="hint">Scrolls through so lazy images appear.</span></span></label>
       <label data-show="full"><input type="checkbox" id="hideFloating">
         <span>Hide floating elements<br><span class="hint">Removes chat bubbles and cookie banners; pinned headers and sidebars appear once.</span></span></label>
-      <label data-show="full"><input type="checkbox" id="sideways">
+      <label data-show="full picture"><input type="checkbox" id="sideways">
         <span>Include sideways-scrolling areas<br><span class="hint">Shows every column of wide tables and pages; the capture gets wider to fit.</span></span></label>
     </div>
     <div class="actions">
