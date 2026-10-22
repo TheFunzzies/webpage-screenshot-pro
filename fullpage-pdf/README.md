@@ -66,6 +66,9 @@ Chrome to render the page as a vector PDF, using the page's on-screen styles.
   scroll-triggered content load. The window is made 10x taller while it does
   this, so even very long pages load in a few seconds (up to 30 s for endless
   feeds; **Save now** on the progress card stops loading and saves what's there).
+  Markdown has its own copy of this option, off by default: text is nearly
+  always on the page already, and lazy images are named from the address
+  they keep for later, so only pages that add text as you scroll need it.
 - **Hide floating elements** (on by default): hides fixed-position widgets such
   as chat bubbles, cookie banners and popups. Fixed headers and sidebars are
   kept; in Letter/A4 mode they're drawn once instead of on every page.
@@ -179,6 +182,12 @@ granted access to tabs up front (what a click grants in real use).
 
 ## Version history
 
+- **0.10.1**: Faster, lighter Markdown. Saving no longer scrolls through
+  the page with the debugger attached unless you turn on "Load the whole page
+  first" for Markdown (lazy images are named from their data attributes
+  instead). The page is read about 40% faster, and the visible area or a
+  region 10-50x faster on big pages (only the boxes on screen are read).
+  Very large tables can no longer fail the save.
 - **0.10.0**: Save as Markdown: the page's text as a `.md` file, for the full
   page, the visible area or a region, with headings, lists, tables, code,
   links, images and math. "Main content only" option. Copy puts Markdown

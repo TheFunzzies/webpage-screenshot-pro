@@ -7,6 +7,9 @@ const DEFAULTS = {
   stamp: false, // PDF: page address and date in a header and footer; Markdown: title, address and date at the top
   mainOnly: true, // Markdown, full page: leave out menus, banners, footers and sidebars
   loadLazy: true,
+  // Markdown's own "load the whole page first": text is nearly always on the
+  // page already, and lazy images are named from their data- attributes.
+  mdLoadLazy: false,
   hideFloating: true,
   sideways: true, // full page: unroll areas that scroll sideways and capture the full width
   folder: 'Webpage Screenshot Pro', // inside Downloads; '' saves to Downloads itself

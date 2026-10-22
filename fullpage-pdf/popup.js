@@ -15,8 +15,12 @@ let batchRunning = false;
 const EXT = { pdf: 'pdf', jpeg: 'jpg', png: 'png', md: 'md' };
 
 function readControls() {
+  // The loading checkbox stands for Markdown's own setting while Markdown
+  // is (was, until this change) chosen.
+  const lazyKey = settings.format === 'md' ? 'mdLoadLazy' : 'loadLazy';
   settings = {
     ...settings,
+    [lazyKey]: $('loadLazy').checked,
     mode: $('mode').value,
     format: $('format').value,
     layout: $('layout').value,
@@ -24,7 +28,6 @@ function readControls() {
     stamp: $('stamp').checked,
     mainOnly: $('mainOnly').checked,
     nameFormat: $('nameFormat').value,
-    loadLazy: $('loadLazy').checked,
     hideFloating: $('hideFloating').checked,
     sideways: $('sideways').checked,
     debugLog: $('debugLog').checked,
@@ -43,7 +46,10 @@ function render() {
   $('nameFormat').value = settings.nameFormat;
   $('nameExample').textContent = `${fileBaseName(tab.title, tab.url, settings.nameFormat)}.${EXT[settings.format]}`;
   $('nameExample').title = $('nameExample').textContent;
-  $('loadLazy').checked = settings.loadLazy;
+  $('loadLazy').checked = settings.format === 'md' ? settings.mdLoadLazy : settings.loadLazy;
+  $('loadLazyHint').textContent = settings.format === 'md'
+    ? 'Only needed for pages that add text as you scroll. Slower.'
+    : 'Scrolls through so lazy images appear.';
   $('hideFloating').checked = settings.hideFloating;
   $('sideways').checked = settings.sideways;
   $('compressionHint').textContent = COMPRESSION_HINTS[settings.compression] || '';
