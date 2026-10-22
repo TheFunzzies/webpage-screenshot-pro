@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Markdown test page</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; margin: 0; }
+    nav, footer { background: #eee; padding: 8px; }
+    main { max-width: 700px; margin: 0 auto; padding: 16px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .card { display: block; }
+    #chat { position: fixed; right: 10px; bottom: 10px; }
+    #far { margin-top: 3000px; }
+  </style>
+</head>
+<body>
+  <nav><a href="/">Home</a> <a href="/about">About</a></nav>
+  <main>
+    <h1>Apple pie</h1>
+    <p>A <strong>classic</strong> pie with <em>tart</em> apples and <b><i>lots</i></b> of butter.
+      See <a href="https://example.com/pie (old)">the old recipe</a> or <a href="https://example.com/">https://example.com/</a>.<span class="sr-only"> (opens in a new tab)</span></p>
+    <p>Prices use * and _ and | characters, and <code>a|b `c`</code> is code.<br>This line comes after a break.</p>
+    <p>1. This paragraph starts like a list item.</p>
+    <p>Area a<sup>2</sup> of H<sub>2</sub>O is <span class="mwe-math-element"><span style="display:none"><math alttext="{\displaystyle a+b}"><mi>a</mi><mo>+</mo><mi>b</mi></math></span><img aria-hidden="true" class="mwe-math-fallback-image-inline" alt="{\displaystyle a+b}" src="math.svg"></span> and
+      <span class="katex"><span class="katex-mathml" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(1px,1px,1px,1px)"><math><semantics><mi>x</mi><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">x2</span></span>.</p>
+    <h2>Ingredients</h2>
+    <ul>
+      <li>6 apples
+        <ul><li>Granny Smith</li><li>Honeycrisp</li></ul>
+      </li>
+      <li><input type="checkbox" checked> Butter</li>
+      <li style="display:none">Hidden item</li>
+    </ul>
+    <h2>Steps</h2>
+    <ol start="3">
+      <li><p>Peel the apples.</p><p>Slice them thin.</p></li>
+      <li>Bake.</li>
+    </ol>
+    <blockquote><p>Best pie I ever had.</p><p>— A reader</p></blockquote>
+    <pre class="language-js"><code>function bake(pie) {
+  return pie;
+
+}</code></pre>
+    <table>
+      <thead><tr><th>Item</th><th>Price</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>Apples</td><td>$4.50</td><td>Fresh | local</td></tr>
+        <tr><td>Butter</td><td>3</td><td>Line one<br>line two</td></tr>
+        <tr><td colspan="2">Total</td><td>7.50</td></tr>
+      </tbody>
+    </table>
+    <table role="presentation"><tr><td><p>Layout cell text.</p></td></tr></table>
+    <figure><img src="pie.png" alt="A [golden] pie" width="40" height="40"><figcaption>The finished pie</figcaption></figure>
+    <hr>
+    <div class="card"><div>Div soup line one</div><div>Div soup line two</div></div>
+    <p aria-hidden="true">Aria hidden text</p>
+    <p id="far">Far down the page.</p>
+  </main>
+  <footer>Copyright footer</footer>
+  <div id="chat">Chat with us</div>
+</body>
+</html>

@@ -25,3 +25,11 @@ export function loadBackground() {
   // Top-level functions and consts, by name.
   return (name) => vm.runInContext(name, ctx);
 }
+
+// Loads markdown.js into Node; returns its text helpers (the page reading
+// itself needs a browser and is covered by the end-to-end tests).
+export function loadMarkdown() {
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(EXT_DIR, 'markdown.js'), 'utf8'), ctx, { filename: 'markdown.js' });
+  return ctx.__fppMarkdown;
+}

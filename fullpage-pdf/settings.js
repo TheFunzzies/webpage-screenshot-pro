@@ -1,10 +1,11 @@
 // Settings shared by the background and the popup.
 const DEFAULTS = {
   mode: 'full', // full | visible | region
-  format: 'pdf', // pdf | jpeg | png
+  format: 'pdf', // pdf | jpeg | png | md
   layout: 'single', // single | letter | a4 (PDF only)
   compression: 'off', // off | light | medium | high (PDF only)
-  stamp: false, // PDF only: page address and date in a header and footer
+  stamp: false, // PDF: page address and date in a header and footer; Markdown: title, address and date at the top
+  mainOnly: true, // Markdown, full page: leave out menus, banners, footers and sidebars
   loadLazy: true,
   hideFloating: true,
   sideways: true, // full page: unroll areas that scroll sideways and capture the full width
@@ -17,7 +18,7 @@ const DEFAULTS = {
 // and the person is told to attach it to a message to the developer.
 const SUPPORT_EMAIL = 'stoneforestdesign@gmail.com';
 
-const FORMAT_NAMES = { pdf: 'PDF', jpeg: 'JPEG', png: 'PNG' };
+const FORMAT_NAMES = { pdf: 'PDF', jpeg: 'JPEG', png: 'PNG', md: 'Markdown' };
 
 // File name without extension, e.g. "Double Apple Pie 2026-10-08".
 // nameFormat: title-date | title-datetime | site-title-date | title
